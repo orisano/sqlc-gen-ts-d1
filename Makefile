@@ -1,7 +1,11 @@
 .PHONY: generate
-
 generate: sqlc.json
 	sqlc generate
+
+.PHONY: release
+release:
+	gh release delete -y v0.0.0-a
+	gh release create v0.0.0-a plugin/bin/sqlc-gen-typescript-d1.wasm plugin/bin/sqlc-gen-typescript-d1.wasm.sha256
 
 sqlc.json: plugin/bin/sqlc-gen-typescript-d1.wasm.sha256 _sqlc.json
 	cat _sqlc.json | WASM_SHA256=$$(cat $<) envsubst > $@
