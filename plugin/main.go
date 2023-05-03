@@ -35,7 +35,8 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			name := q.GetName()
 			lowerName := strings.ToLower(name[:1]) + name[1:]
 
-			fmt.Fprintf(querier, "const %sQuery = `%s`;\n", lowerName, q.GetText())
+			query := "-- name: " + q.GetName() + " " + q.GetCmd() + "\n" + q.GetText()
+			fmt.Fprintf(querier, "const %sQuery = `%s`;\n", lowerName, query)
 
 			querier.WriteByte('\n')
 

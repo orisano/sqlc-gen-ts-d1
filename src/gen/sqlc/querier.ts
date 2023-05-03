@@ -1,6 +1,7 @@
 import {D1Database, D1Result} from "@cloudflare/workers-types/2022-11-30"
 
-const getAccountQuery = `SELECT pk, id, display_name, email FROM account WHERE id = ?1`;
+const getAccountQuery = `-- name: GetAccount :one
+SELECT pk, id, display_name, email FROM account WHERE id = ?1`;
 
 export type GetAccountParams = {
   accountId: string;
@@ -23,7 +24,8 @@ export async function getAccount(
     .first<GetAccountRow>();
 }
 
-const listAccountsQuery = `SELECT pk, id, display_name, email FROM account`;
+const listAccountsQuery = `-- name: ListAccounts :many
+SELECT pk, id, display_name, email FROM account`;
 
 export type ListAccountsParams = {
 };
@@ -44,7 +46,8 @@ export async function listAccounts(
     .all<ListAccountsRow>();
 }
 
-const createAccountQuery = `INSERT INTO account (id, display_name, email)
+const createAccountQuery = `-- name: CreateAccount :exec
+INSERT INTO account (id, display_name, email)
 VALUES (?1, ?2, ?3)`;
 
 export type CreateAccountParams = {
@@ -66,7 +69,8 @@ export async function createAccount(
     .run<CreateAccountRow>();
 }
 
-const updateAccountDisplayNameQuery = `UPDATE account
+const updateAccountDisplayNameQuery = `-- name: UpdateAccountDisplayName :one
+UPDATE account
 SET display_name = ?1
 WHERE id = ?2
 RETURNING pk, id, display_name, email`;
