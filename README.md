@@ -14,7 +14,7 @@ sqlc.json の plugins 以下に typescript-d1 を追加する必要がありま�
     "name": "typescript-d1",
     "wasm": {
         "url": "https://github.com/orisano/sqlc-gen-typescript-d1/releases/download/v0.0.0-a/sqlc-gen-typescript-d1.wasm",
-        "sha256": "2f51d44459182959d9eda05409ae54919225866d2a2469fed786cbad6d0e8e65"
+        "sha256": "d70852c9a58d6c30903cc81a7e811e530a69e096c44769223ae98b261184f146"
     }
 }
 ```
