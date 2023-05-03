@@ -1,3 +1,5 @@
+import {D1Database, D1Result} from "@cloudflare/workers-types/2022-11-30"
+
 const getAccountQuery = `SELECT pk, id, display_name, email FROM account WHERE id = ?1`;
 
 export type GetAccountParams = {
@@ -14,11 +16,11 @@ export type GetAccountRow = {
 export async function getAccount(
   d1: D1Database,
   args: GetAccountParams
-): Promise<GetAccountRow | null> {
+): Promise<GetAccountRow> {
   return await d1
     .prepare(getAccountQuery)
     .bind(args.accountId)
-    .first<GetAccountRow | null>();
+    .first<GetAccountRow>();
 }
 
 const listAccountsQuery = `SELECT pk, id, display_name, email FROM account`;
@@ -36,10 +38,10 @@ export type ListAccountsRow = {
 export async function listAccounts(
   d1: D1Database,
   args: ListAccountsParams
-): Promise<ListAccountsRow[]> {
+): Promise<D1Result<ListAccountsRow>> {
   return await d1
     .prepare(listAccountsQuery)
-    .all<ListAccountsRow[]>();
+    .all<ListAccountsRow>();
 }
 
 const createAccountQuery = `INSERT INTO account (id, display_name, email)
@@ -57,11 +59,11 @@ export type CreateAccountRow = {
 export async function createAccount(
   d1: D1Database,
   args: CreateAccountParams
-): Promise<CreateAccountRow | null> {
+): Promise<D1Result<CreateAccountRow>> {
   return await d1
     .prepare(createAccountQuery)
     .bind(args.id, args.displayName, args.email)
-    .run<CreateAccountRow | null>();
+    .run<CreateAccountRow>();
 }
 
 const updateAccountDisplayNameQuery = `UPDATE account
@@ -84,10 +86,10 @@ export type UpdateAccountDisplayNameRow = {
 export async function updateAccountDisplayName(
   d1: D1Database,
   args: UpdateAccountDisplayNameParams
-): Promise<UpdateAccountDisplayNameRow | null> {
+): Promise<UpdateAccountDisplayNameRow> {
   return await d1
     .prepare(updateAccountDisplayNameQuery)
     .bind(args.displayName, args.id)
-    .first<UpdateAccountDisplayNameRow | null>();
+    .first<UpdateAccountDisplayNameRow>();
 }
 

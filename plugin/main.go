@@ -28,6 +28,9 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 	}
 	{
 		querier := bytes.NewBuffer(nil)
+
+		querier.WriteString("import {D1Database, D1Result} from \"@cloudflare/workers-types/2022-11-30\"\n\n")
+
 		for _, q := range request.GetQueries() {
 			name := q.GetName()
 			lowerName := strings.ToLower(name[:1]) + name[1:]
@@ -61,11 +64,12 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 
 			querier.WriteByte('\n')
 
+			rowType := name + "Row"
 			var retType string
-			if q.GetCmd() == ":many" {
-				retType = name + "Row[]"
+			if q.GetCmd() == ":one" {
+				retType = rowType
 			} else {
-				retType = name + "Row | null"
+				retType = "D1Result<" + rowType + ">"
 			}
 
 			fmt.Fprintf(querier, "export async function %s(\n", lowerName)
@@ -86,11 +90,11 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			}
 			switch q.GetCmd() {
 			case ":one":
-				fmt.Fprintf(querier, "    .first<%s>();\n", retType)
+				fmt.Fprintf(querier, "    .first<%s>();\n", rowType)
 			case ":many":
-				fmt.Fprintf(querier, "    .all<%s>();\n", retType)
+				fmt.Fprintf(querier, "    .all<%s>();\n", rowType)
 			case ":exec":
-				fmt.Fprintf(querier, "    .run<%s>();\n", retType)
+				fmt.Fprintf(querier, "    .run<%s>();\n", rowType)
 			}
 			fmt.Fprintf(querier, "}\n")
 
