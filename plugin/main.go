@@ -68,7 +68,7 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			rowType := name + "Row"
 			var retType string
 			if q.GetCmd() == ":one" {
-				retType = rowType
+				retType = rowType + " | null"
 			} else {
 				retType = "D1Result<" + rowType + ">"
 			}
@@ -91,7 +91,7 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			}
 			switch q.GetCmd() {
 			case ":one":
-				fmt.Fprintf(querier, "    .first<%s>();\n", rowType)
+				fmt.Fprintf(querier, "    .first<%s>();\n", retType)
 			case ":many":
 				fmt.Fprintf(querier, "    .all<%s>();\n", rowType)
 			case ":exec":

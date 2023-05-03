@@ -17,11 +17,11 @@ export type GetAccountRow = {
 export async function getAccount(
   d1: D1Database,
   args: GetAccountParams
-): Promise<GetAccountRow> {
+): Promise<GetAccountRow | null> {
   return await d1
     .prepare(getAccountQuery)
     .bind(args.accountId)
-    .first<GetAccountRow>();
+    .first<GetAccountRow | null>();
 }
 
 const listAccountsQuery = `-- name: ListAccounts :many
@@ -90,10 +90,10 @@ export type UpdateAccountDisplayNameRow = {
 export async function updateAccountDisplayName(
   d1: D1Database,
   args: UpdateAccountDisplayNameParams
-): Promise<UpdateAccountDisplayNameRow> {
+): Promise<UpdateAccountDisplayNameRow | null> {
   return await d1
     .prepare(updateAccountDisplayNameQuery)
     .bind(args.displayName, args.id)
-    .first<UpdateAccountDisplayNameRow>();
+    .first<UpdateAccountDisplayNameRow | null>();
 }
 
