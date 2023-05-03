@@ -10,7 +10,7 @@ https://github.com/orisano/sqlc を使う必要があります
 
 sqlc.json の plugins 以下に typescript-d1 を追加する必要があります
 ```bash
-$ cat <<EOS
+cat <<EOS
 {
     "name": "typescript-d1",
     "wasm": {
