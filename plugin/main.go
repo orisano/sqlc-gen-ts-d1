@@ -61,10 +61,17 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 
 			querier.WriteByte('\n')
 
+			var retType string
+			if q.GetCmd() == ":many" {
+				retType = name + "Row[]"
+			} else {
+				retType = name + "Row | null"
+			}
+
 			fmt.Fprintf(querier, "export async function %s(\n", lowerName)
 			fmt.Fprintf(querier, "  d1: D1Database,\n")
 			fmt.Fprintf(querier, "  args: %sParams\n", name)
-			fmt.Fprintf(querier, "): Promise<%sRow | null> {\n", name)
+			fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
 			fmt.Fprintf(querier, "  return await d1\n")
 			fmt.Fprintf(querier, "    .prepare(%sQuery)\n", lowerName)
 			if len(q.GetParams()) > 0 {
@@ -79,11 +86,11 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			}
 			switch q.GetCmd() {
 			case ":one":
-				fmt.Fprintf(querier, "    .first<%sRow | null>();\n", name)
+				fmt.Fprintf(querier, "    .first<%s>();\n", retType)
 			case ":many":
-				fmt.Fprintf(querier, "    .all<%sRow[]>();\n", name)
+				fmt.Fprintf(querier, "    .all<%s>();\n", retType)
 			case ":exec":
-				fmt.Fprintf(querier, "    .run<%sRow | null>();\n", name)
+				fmt.Fprintf(querier, "    .run<%s>();\n", retType)
 			}
 			fmt.Fprintf(querier, "}\n")
 

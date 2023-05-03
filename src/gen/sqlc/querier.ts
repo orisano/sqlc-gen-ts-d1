@@ -36,7 +36,7 @@ export type ListAccountsRow = {
 export async function listAccounts(
   d1: D1Database,
   args: ListAccountsParams
-): Promise<ListAccountsRow | null> {
+): Promise<ListAccountsRow[]> {
   return await d1
     .prepare(listAccountsQuery)
     .all<ListAccountsRow[]>();
