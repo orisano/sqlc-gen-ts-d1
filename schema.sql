@@ -1,0 +1,6 @@
+CREATE TABLE account (
+  pk INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  email TEXT
+);
