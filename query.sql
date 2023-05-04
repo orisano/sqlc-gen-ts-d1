@@ -6,7 +6,7 @@ SELECT * FROM account;
 
 -- name: CreateAccount :exec
 INSERT INTO account (id, display_name, email)
-VALUES (@id, @display_name, @email);
+VALUES (@id, @display_name, sqlc_narg(email));
 
 -- name: UpdateAccountDisplayName :one
 UPDATE account

@@ -64,6 +64,9 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 				paramName := toLowerCamel(p.GetColumn().GetName())
 				sqliteType := p.GetColumn().GetType().GetName()
 				tsType := tsTypeMap[sqliteType]
+				if !p.GetColumn().GetNotNull() {
+					tsType += " | null"
+				}
 				fmt.Fprintf(querier, "  %s: %s;\n", paramName, tsType)
 			}
 			querier.WriteString("};\n")

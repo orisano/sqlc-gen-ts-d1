@@ -82,7 +82,7 @@ VALUES (?1, ?2, ?3)`;
 export type CreateAccountParams = {
   id: string;
   displayName: string;
-  email: string;
+  email: string | null;
 };
 
 export type CreateAccountRow = {
