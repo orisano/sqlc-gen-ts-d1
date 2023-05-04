@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/tabbed/sqlc-go/codegen"
@@ -21,6 +22,19 @@ func toLowerCamel(snake string) string {
 }
 
 func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, error) {
+	options := map[string]string{}
+	if pOpt := string(request.GetPluginOptions()); len(pOpt) > 0 {
+		s, _ := strconv.Unquote(pOpt)
+		for _, kv := range strings.Split(s, ",") {
+			k, v, _ := strings.Cut(kv, "=")
+			options[k] = v
+		}
+	}
+	workersTypesVersion := "2022-11-30"
+	if v, ok := options["workers-types"]; ok {
+		workersTypesVersion = v
+	}
+
 	var files []*codegen.File
 	tsTypeMap := map[string]string{
 		"INTEGER": "bigint",
@@ -29,7 +43,12 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 	{
 		querier := bytes.NewBuffer(nil)
 
-		querier.WriteString("import {D1Database, D1Result} from \"@cloudflare/workers-types/2022-11-30\"\n\n")
+		workersTypesPackage := "@cloudflare/workers-types"
+		if workersTypesVersion != "" {
+			workersTypesPackage += "/" + workersTypesVersion
+		}
+
+		querier.WriteString("import {D1Database, D1Result} from \"" + workersTypesPackage + "\"\n\n")
 
 		for _, q := range request.GetQueries() {
 			name := q.GetName()

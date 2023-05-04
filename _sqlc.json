@@ -17,7 +17,8 @@
       "codegen": [
         {
           "out": "src/gen/sqlc",
-          "plugin": "typescript-d1"
+          "plugin": "typescript-d1",
+          "options": "workers-types="
         }
       ]
     }

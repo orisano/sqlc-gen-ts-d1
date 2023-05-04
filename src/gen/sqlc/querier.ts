@@ -1,4 +1,4 @@
-import {D1Database, D1Result} from "@cloudflare/workers-types/2022-11-30"
+import {D1Database, D1Result} from "@cloudflare/workers-types"
 
 const getAccountQuery = `-- name: GetAccount :one
 SELECT pk, id, display_name, email FROM account WHERE id = ?1`;
