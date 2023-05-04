@@ -1,5 +1,3 @@
-import {D1Database, D1Result} from "@cloudflare/workers-types"
-
 const getAccountQuery = `-- name: GetAccount :one
 SELECT pk, id, display_name, email FROM account WHERE id = ?1`;
 
@@ -29,7 +27,7 @@ export async function getAccount(
     .prepare(getAccountQuery)
     .bind(args.accountId)
     .first<RawGetAccountRow | null>()
-    .then(raw => raw ? {
+    .then((raw: RawGetAccountRow | null) => raw ? {
       pk: raw.pk,
       id: raw.id,
       displayName: raw.display_name,
@@ -64,9 +62,9 @@ export async function listAccounts(
   return await d1
     .prepare(listAccountsQuery)
     .all<RawListAccountsRow>()
-    .then(r => { return {
+    .then((r: D1Result<RawListAccountsRow>) => { return {
       ...r,
-      results: r.results ? r.results.map(raw => { return {
+      results: r.results ? r.results.map((raw: RawListAccountsRow) => { return {
         pk: raw.pk,
         id: raw.id,
         displayName: raw.display_name,
@@ -131,7 +129,7 @@ export async function updateAccountDisplayName(
     .prepare(updateAccountDisplayNameQuery)
     .bind(args.displayName, args.id)
     .first<RawUpdateAccountDisplayNameRow | null>()
-    .then(raw => raw ? {
+    .then((raw: RawUpdateAccountDisplayNameRow | null) => raw ? {
       pk: raw.pk,
       id: raw.id,
       displayName: raw.display_name,

@@ -34,6 +34,10 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 	if v, ok := options["workers-types"]; ok {
 		workersTypesVersion = v
 	}
+	workersTypesV3 := false
+	if v, ok := options["workers-types-v3"]; ok {
+		workersTypesV3 = v != ""
+	}
 
 	var files []*codegen.File
 	tsTypeMap := map[string]string{
@@ -48,7 +52,9 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			workersTypesPackage += "/" + workersTypesVersion
 		}
 
-		querier.WriteString("import {D1Database, D1Result} from \"" + workersTypesPackage + "\"\n\n")
+		if !workersTypesV3 {
+			querier.WriteString("import {D1Database, D1Result} from \"" + workersTypesPackage + "\"\n\n")
+		}
 
 		for _, q := range request.GetQueries() {
 			name := q.GetName()
@@ -153,7 +159,7 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 				querier.WriteByte('\n')
 
 				if q.GetCmd() == ":one" {
-					fmt.Fprintf(querier, "    .then(raw => raw ? {\n")
+					fmt.Fprintf(querier, "    .then((raw: %s) => raw ? {\n", resultType)
 					for _, c := range q.GetColumns() {
 						from := c.GetName()
 						to := toLowerCamel(from)
@@ -161,9 +167,9 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 					}
 					fmt.Fprintf(querier, "    } : null)")
 				} else {
-					fmt.Fprintf(querier, "    .then(r => { return {\n")
+					fmt.Fprintf(querier, "    .then((r: D1Result<%s>) => { return {\n", resultType)
 					fmt.Fprintf(querier, "      ...r,\n")
-					fmt.Fprintf(querier, "      results: r.results ? r.results.map(raw => { return {\n")
+					fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
 					for _, c := range q.GetColumns() {
 						from := c.GetName()
 						to := toLowerCamel(from)

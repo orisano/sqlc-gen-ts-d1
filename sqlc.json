@@ -5,7 +5,7 @@
       "name": "typescript-d1",
       "wasm": {
         "url": "file://plugin/bin/sqlc-gen-typescript-d1.wasm",
-        "sha256": "2deb905d57d3062fad78e8108cf6928b065883c278df29c0264db1fc9a622145"
+        "sha256": "1fd712423ead87e945d4cf6148b5ea7cf19a2243bee496086342d863601dc52e"
       }
     }
   ],
@@ -18,7 +18,7 @@
         {
           "out": "src/gen/sqlc",
           "plugin": "typescript-d1",
-          "options": "workers-types="
+          "options": "workers-types-v3=1"
         }
       ]
     }
