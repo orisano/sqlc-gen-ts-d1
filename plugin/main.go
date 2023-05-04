@@ -47,13 +47,20 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 				tsType := tsTypeMap[sqliteType]
 				fmt.Fprintf(querier, "  %s: %s;\n", paramName, tsType)
 			}
-			fmt.Fprintf(querier, "};\n")
+			querier.WriteString("};\n")
 
 			querier.WriteByte('\n')
 
-			fmt.Fprintf(querier, "export type %sRow = {\n", name)
+			needRawType := false
+
+			rowType := name + "Row"
+			fmt.Fprintf(querier, "export type %s = {\n", rowType)
 			for _, c := range q.GetColumns() {
-				colName := c.GetName()
+				originalColName := c.GetName()
+				colName := toLowerCamel(originalColName)
+				if originalColName != colName {
+					needRawType = true
+				}
 				sqliteType := c.GetType().GetName()
 				tsType := tsTypeMap[sqliteType]
 				if !c.GetNotNull() {
@@ -61,16 +68,39 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 				}
 				fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
 			}
-			fmt.Fprintf(querier, "};\n")
+			querier.WriteString("};\n")
 
 			querier.WriteByte('\n')
 
-			rowType := name + "Row"
-			var retType string
+			if needRawType {
+				fmt.Fprintf(querier, "type Raw%s = {\n", rowType)
+				for _, c := range q.GetColumns() {
+					colName := c.GetName()
+					sqliteType := c.GetType().GetName()
+					tsType := tsTypeMap[sqliteType]
+					if !c.GetNotNull() {
+						tsType += " | null"
+					}
+					fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
+				}
+				querier.WriteString("};\n")
+
+				querier.WriteByte('\n')
+			}
+
+			var retType, resultType string
 			if q.GetCmd() == ":one" {
 				retType = rowType + " | null"
+				resultType = retType
+				if needRawType {
+					resultType = "Raw" + rowType + " | null"
+				}
 			} else {
 				retType = "D1Result<" + rowType + ">"
+				resultType = rowType
+				if needRawType {
+					resultType = "Raw" + rowType
+				}
 			}
 
 			fmt.Fprintf(querier, "export async function %s(\n", lowerName)
@@ -91,13 +121,38 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			}
 			switch q.GetCmd() {
 			case ":one":
-				fmt.Fprintf(querier, "    .first<%s>();\n", retType)
+				fmt.Fprintf(querier, "    .first<%s>()", resultType)
 			case ":many":
-				fmt.Fprintf(querier, "    .all<%s>();\n", rowType)
+				fmt.Fprintf(querier, "    .all<%s>()", resultType)
 			case ":exec":
-				fmt.Fprintf(querier, "    .run<%s>();\n", rowType)
+				fmt.Fprintf(querier, "    .run<%s>()", resultType)
 			}
-			fmt.Fprintf(querier, "}\n")
+			if needRawType {
+				querier.WriteByte('\n')
+
+				if q.GetCmd() == ":one" {
+					fmt.Fprintf(querier, "    .then(raw => raw ? {\n")
+					for _, c := range q.GetColumns() {
+						from := c.GetName()
+						to := toLowerCamel(from)
+						fmt.Fprintf(querier, "      %s: raw.%s,\n", to, from)
+					}
+					fmt.Fprintf(querier, "    } : null)")
+				} else {
+					fmt.Fprintf(querier, "    .then(r => { return {\n")
+					fmt.Fprintf(querier, "      ...r,\n")
+					fmt.Fprintf(querier, "      results: r.results ? r.results.map(raw => { return {\n")
+					for _, c := range q.GetColumns() {
+						from := c.GetName()
+						to := toLowerCamel(from)
+						fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
+					}
+					fmt.Fprintf(querier, "      }}) : null,\n")
+					fmt.Fprintf(querier, "    }})")
+				}
+			}
+			querier.WriteString(";\n")
+			querier.WriteString("}\n")
 
 			querier.WriteByte('\n')
 		}

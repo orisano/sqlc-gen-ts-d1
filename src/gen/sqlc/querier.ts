@@ -10,6 +10,13 @@ export type GetAccountParams = {
 export type GetAccountRow = {
   pk: bigint;
   id: string;
+  displayName: string;
+  email: string | null;
+};
+
+type RawGetAccountRow = {
+  pk: bigint;
+  id: string;
   display_name: string;
   email: string | null;
 };
@@ -21,7 +28,13 @@ export async function getAccount(
   return await d1
     .prepare(getAccountQuery)
     .bind(args.accountId)
-    .first<GetAccountRow | null>();
+    .first<RawGetAccountRow | null>()
+    .then(raw => raw ? {
+      pk: raw.pk,
+      id: raw.id,
+      displayName: raw.display_name,
+      email: raw.email,
+    } : null);
 }
 
 const listAccountsQuery = `-- name: ListAccounts :many
@@ -31,6 +44,13 @@ export type ListAccountsParams = {
 };
 
 export type ListAccountsRow = {
+  pk: bigint;
+  id: string;
+  displayName: string;
+  email: string | null;
+};
+
+type RawListAccountsRow = {
   pk: bigint;
   id: string;
   display_name: string;
@@ -43,7 +63,16 @@ export async function listAccounts(
 ): Promise<D1Result<ListAccountsRow>> {
   return await d1
     .prepare(listAccountsQuery)
-    .all<ListAccountsRow>();
+    .all<RawListAccountsRow>()
+    .then(r => { return {
+      ...r,
+      results: r.results ? r.results.map(raw => { return {
+        pk: raw.pk,
+        id: raw.id,
+        displayName: raw.display_name,
+        email: raw.email,
+      }}) : null,
+    }});
 }
 
 const createAccountQuery = `-- name: CreateAccount :exec
@@ -83,6 +112,13 @@ export type UpdateAccountDisplayNameParams = {
 export type UpdateAccountDisplayNameRow = {
   pk: bigint;
   id: string;
+  displayName: string;
+  email: string | null;
+};
+
+type RawUpdateAccountDisplayNameRow = {
+  pk: bigint;
+  id: string;
   display_name: string;
   email: string | null;
 };
@@ -94,6 +130,12 @@ export async function updateAccountDisplayName(
   return await d1
     .prepare(updateAccountDisplayNameQuery)
     .bind(args.displayName, args.id)
-    .first<UpdateAccountDisplayNameRow | null>();
+    .first<RawUpdateAccountDisplayNameRow | null>()
+    .then(raw => raw ? {
+      pk: raw.pk,
+      id: raw.id,
+      displayName: raw.display_name,
+      email: raw.email,
+    } : null);
 }
 
