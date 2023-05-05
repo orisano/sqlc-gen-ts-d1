@@ -74,7 +74,7 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 	}
 	workersTypesV3 := false
 	if v, ok := options["workers-types-v3"]; ok {
-		workersTypesV3 = v != ""
+		workersTypesV3 = v == "1"
 	}
 
 	var files []*codegen.File
