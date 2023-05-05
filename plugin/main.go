@@ -105,46 +105,50 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 
 			querier.WriteByte('\n')
 
-			fmt.Fprintf(querier, "export type %sParams = {\n", name)
-			for _, p := range q.GetParams() {
-				paramName := toLowerCamel(p.GetColumn().GetName())
-				sqliteType := p.GetColumn().GetType().GetName()
-				tsType := tsTypeMap[sqliteType]
-				nullable := false
-				if c := p.GetColumn(); !c.GetNotNull() {
-					nullable = true
-				} else if tc := tableMap.find(c); tc != nil && !tc.GetNotNull() {
-					nullable = true
+			if len(q.GetParams()) > 0 {
+				fmt.Fprintf(querier, "export type %sParams = {\n", name)
+				for _, p := range q.GetParams() {
+					paramName := toLowerCamel(p.GetColumn().GetName())
+					sqliteType := p.GetColumn().GetType().GetName()
+					tsType := tsTypeMap[sqliteType]
+					nullable := false
+					if c := p.GetColumn(); !c.GetNotNull() {
+						nullable = true
+					} else if tc := tableMap.find(c); tc != nil && !tc.GetNotNull() {
+						nullable = true
+					}
+					if nullable {
+						tsType += " | null"
+					}
+					fmt.Fprintf(querier, "  %s: %s;\n", paramName, tsType)
 				}
-				if nullable {
-					tsType += " | null"
-				}
-				fmt.Fprintf(querier, "  %s: %s;\n", paramName, tsType)
-			}
-			querier.WriteString("};\n")
+				querier.WriteString("};\n")
 
-			querier.WriteByte('\n')
+				querier.WriteByte('\n')
+			}
 
 			needRawType := false
-
 			rowType := name + "Row"
-			fmt.Fprintf(querier, "export type %s = {\n", rowType)
-			for _, c := range q.GetColumns() {
-				originalColName := c.GetName()
-				colName := toLowerCamel(originalColName)
-				if originalColName != colName {
-					needRawType = true
-				}
-				sqliteType := c.GetType().GetName()
-				tsType := tsTypeMap[sqliteType]
-				if !c.GetNotNull() {
-					tsType += " | null"
-				}
-				fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
-			}
-			querier.WriteString("};\n")
 
-			querier.WriteByte('\n')
+			if q.GetCmd() != ":exec" {
+				fmt.Fprintf(querier, "export type %s = {\n", rowType)
+				for _, c := range q.GetColumns() {
+					originalColName := c.GetName()
+					colName := toLowerCamel(originalColName)
+					if originalColName != colName {
+						needRawType = true
+					}
+					sqliteType := c.GetType().GetName()
+					tsType := tsTypeMap[sqliteType]
+					if !c.GetNotNull() {
+						tsType += " | null"
+					}
+					fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
+				}
+				querier.WriteString("};\n")
+
+				querier.WriteByte('\n')
+			}
 
 			if needRawType {
 				fmt.Fprintf(querier, "type Raw%s = {\n", rowType)
@@ -163,12 +167,14 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			}
 
 			var retType, resultType string
-			if q.GetCmd() == ":one" {
+			if cmd := q.GetCmd(); cmd == ":one" {
 				retType = rowType + " | null"
 				resultType = retType
 				if needRawType {
 					resultType = "Raw" + rowType + " | null"
 				}
+			} else if cmd == ":exec" {
+				retType = "D1Result"
 			} else {
 				retType = "D1Result<" + rowType + ">"
 				resultType = rowType
@@ -178,8 +184,12 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			}
 
 			fmt.Fprintf(querier, "export async function %s(\n", lowerName)
-			fmt.Fprintf(querier, "  d1: D1Database,\n")
-			fmt.Fprintf(querier, "  args: %sParams\n", name)
+			fmt.Fprintf(querier, "  d1: D1Database")
+			if len(q.GetParams()) > 0 {
+				querier.WriteString(",\n")
+				fmt.Fprintf(querier, "  args: %sParams", name)
+			}
+			querier.WriteString("\n")
 			fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
 			fmt.Fprintf(querier, "  return await d1\n")
 			fmt.Fprintf(querier, "    .prepare(%sQuery)\n", lowerName)
@@ -199,7 +209,7 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			case ":many":
 				fmt.Fprintf(querier, "    .all<%s>()", resultType)
 			case ":exec":
-				fmt.Fprintf(querier, "    .run<%s>()", resultType)
+				fmt.Fprintf(querier, "    .run()")
 			}
 			if needRawType {
 				querier.WriteByte('\n')
