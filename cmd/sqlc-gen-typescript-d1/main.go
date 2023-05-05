@@ -133,6 +133,8 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		}
 		imports := map[string]bool{}
 
+		const embedSep = "_"
+
 		for _, q := range request.GetQueries() {
 			name := q.GetName()
 			lowerName := strings.ToLower(name[:1]) + name[1:]
@@ -146,7 +148,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				var news, olds []string
 				for _, tc := range tableMap.m[e].t.GetColumns() {
 					from := e + "." + tc.GetName()
-					to := from + " AS " + e + "_" + tc.GetName()
+					to := from + " AS " + e + embedSep + tc.GetName()
 					olds = append(olds, from)
 					news = append(news, to)
 				}
@@ -223,7 +225,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 						et := c.GetEmbedTable().GetName()
 						t := tableMap.m[et]
 						for _, tc := range t.t.GetColumns() {
-							colName := et + "_" + tc.GetName()
+							colName := et + embedSep + tc.GetName()
 							sqliteType := tc.GetType().GetName()
 							tsType := tsTypeMap[sqliteType]
 							if !tc.GetNotNull() {
@@ -294,7 +296,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 						if et := c.GetEmbedTable().GetName(); et != "" {
 							fmt.Fprintf(querier, "      %s: {\n", to)
 							for _, tc := range tableMap.m[et].t.GetColumns() {
-								from := et + "_" + tc.GetName()
+								from := et + embedSep + tc.GetName()
 								to := toLowerCamel(tc.GetName())
 								fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
 							}
@@ -314,7 +316,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 						if et := c.GetEmbedTable().GetName(); et != "" {
 							fmt.Fprintf(querier, "        %s: {\n", to)
 							for _, tc := range tableMap.m[et].t.GetColumns() {
-								from := et + "_" + tc.GetName()
+								from := et + embedSep + tc.GetName()
 								to := toLowerCamel(tc.GetName())
 								fmt.Fprintf(querier, "          %s: raw.%s,\n", to, from)
 							}
