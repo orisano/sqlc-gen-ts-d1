@@ -221,7 +221,7 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 						to := toLowerCamel(from)
 						fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
 					}
-					fmt.Fprintf(querier, "      }}) : null,\n")
+					fmt.Fprintf(querier, "      }}) : undefined,\n")
 					fmt.Fprintf(querier, "    }})")
 				}
 			}

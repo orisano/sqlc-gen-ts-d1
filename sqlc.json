@@ -5,7 +5,7 @@
       "name": "typescript-d1",
       "wasm": {
         "url": "file://plugin/bin/sqlc-gen-typescript-d1.wasm",
-        "sha256": "dceb672c6b23fe6dc427b822d2b0cb5c7a5515500c5774aa422d053e1baa346a"
+        "sha256": "050fa4b80ed2df243e9c10a90600dde8dddb39142e3eb851b8d1b6543aafbff0"
       }
     }
   ],

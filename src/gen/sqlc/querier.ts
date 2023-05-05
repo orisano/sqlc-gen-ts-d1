@@ -69,7 +69,7 @@ export async function listAccounts(
         id: raw.id,
         displayName: raw.display_name,
         email: raw.email,
-      }}) : null,
+      }}) : undefined,
     }});
 }
 
