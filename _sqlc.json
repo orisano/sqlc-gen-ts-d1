@@ -4,7 +4,7 @@
     {
       "name": "typescript-d1",
       "wasm": {
-        "url": "file://plugin/bin/sqlc-gen-typescript-d1.wasm",
+        "url": "file://bin/sqlc-gen-typescript-d1.wasm",
         "sha256": "$WASM_SHA256"
       }
     }

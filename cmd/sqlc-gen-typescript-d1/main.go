@@ -1,20 +1,23 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
-	"context"
 	"fmt"
+	"io"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/tabbed/sqlc-go/codegen"
+	"github.com/orisano/sqlc-gen-typescript-d1/codegen/plugin"
 )
 
 type TableMap struct {
 	m map[string]*ColumnMap
 }
 
-func (m *TableMap) find(c *codegen.Column) *codegen.Column {
+func (m *TableMap) find(c *plugin.Column) *plugin.Column {
 	t := c.GetTable()
 	if t == nil {
 		return nil
@@ -27,17 +30,19 @@ func (m *TableMap) find(c *codegen.Column) *codegen.Column {
 }
 
 type ColumnMap struct {
-	m map[string]*codegen.Column
+	t *plugin.Table
+	m map[string]*plugin.Column
 }
 
-func buildTableMap(catalog *codegen.Catalog) TableMap {
+func buildTableMap(catalog *plugin.Catalog) TableMap {
 	tm := TableMap{
 		m: map[string]*ColumnMap{},
 	}
 	for _, schema := range catalog.GetSchemas() {
 		for _, table := range schema.GetTables() {
 			cm := ColumnMap{
-				m: map[string]*codegen.Column{},
+				t: table,
+				m: map[string]*plugin.Column{},
 			}
 			for _, column := range table.GetColumns() {
 				cm.m[column.GetName()] = column
@@ -48,18 +53,21 @@ func buildTableMap(catalog *codegen.Catalog) TableMap {
 	return tm
 }
 
-func toLowerCamel(snake string) string {
+func toUpperCamel(snake string) string {
 	tokens := strings.Split(snake, "_")
-
 	var b strings.Builder
-	b.WriteString(tokens[0])
-	for _, t := range tokens[1:] {
+	for _, t := range tokens {
 		b.WriteString(strings.ToUpper(t[:1]) + t[1:])
 	}
 	return b.String()
 }
 
-func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, error) {
+func toLowerCamel(snake string) string {
+	s := toUpperCamel(snake)
+	return strings.ToLower(s[:1]) + s[1:]
+}
+
+func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	options := map[string]string{}
 	if pOpt := string(request.GetPluginOptions()); len(pOpt) > 0 {
 		s, _ := strconv.Unquote(pOpt)
@@ -77,13 +85,34 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 		workersTypesV3 = v == "1"
 	}
 
-	var files []*codegen.File
+	var files []*plugin.File
 	tsTypeMap := map[string]string{
 		"INTEGER": "number",
 		"TEXT":    "string",
 	}
 	for _, o := range request.GetSettings().GetOverrides() {
 		tsTypeMap[o.GetDbType()] = o.GetCodeType()
+	}
+
+	{
+		models := bytes.NewBuffer(nil)
+		for _, s := range request.GetCatalog().GetSchemas() {
+			for _, t := range s.GetTables() {
+				modelName := toUpperCamel(t.GetRel().GetName())
+				fmt.Fprintf(models, "export type %s = {\n", modelName)
+				for _, c := range t.GetColumns() {
+					colName := toLowerCamel(c.GetName())
+					sqliteType := c.GetType().GetName()
+					tsType := tsTypeMap[sqliteType]
+					if !c.GetNotNull() {
+						tsType += " | null"
+					}
+					fmt.Fprintf(models, "  %s: %s;\n", colName, tsType)
+				}
+				fmt.Fprintf(models, "};\n\n")
+			}
+		}
+		files = append(files, &plugin.File{Name: "models.ts", Contents: models.Bytes()})
 	}
 
 	{
@@ -96,9 +125,11 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 			workersTypesPackage += "/" + workersTypesVersion
 		}
 
+		header := bytes.NewBuffer(nil)
 		if !workersTypesV3 {
-			querier.WriteString("import {D1Database, D1Result} from \"" + workersTypesPackage + "\"\n\n")
+			header.WriteString("import { D1Database, D1Result } from \"" + workersTypesPackage + "\"\n")
 		}
+		imports := map[string]bool{}
 
 		for _, q := range request.GetQueries() {
 			name := q.GetName()
@@ -142,10 +173,16 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 					if originalColName != colName {
 						needRawType = true
 					}
-					sqliteType := c.GetType().GetName()
-					tsType := tsTypeMap[sqliteType]
-					if !c.GetNotNull() {
-						tsType += " | null"
+					tsType := ""
+					if sqliteType := c.GetType().GetName(); sqliteType != "" {
+						tsType = tsTypeMap[sqliteType]
+						if !c.GetNotNull() {
+							tsType += " | null"
+						}
+					} else {
+						needRawType = true
+						tsType = toUpperCamel(c.GetEmbedTable().GetName())
+						imports[tsType] = true
 					}
 					fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
 				}
@@ -158,12 +195,24 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 				fmt.Fprintf(querier, "type Raw%s = {\n", rowType)
 				for _, c := range q.GetColumns() {
 					colName := c.GetName()
-					sqliteType := c.GetType().GetName()
-					tsType := tsTypeMap[sqliteType]
-					if !c.GetNotNull() {
-						tsType += " | null"
+					if sqliteType := c.GetType().GetName(); sqliteType != "" {
+						tsType := tsTypeMap[sqliteType]
+						if !c.GetNotNull() {
+							tsType += " | null"
+						}
+						fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
+					} else {
+						t := tableMap.m[c.GetEmbedTable().GetName()]
+						for _, tc := range t.t.GetColumns() {
+							colName := tc.GetName()
+							sqliteType := tc.GetType().GetName()
+							tsType := tsTypeMap[sqliteType]
+							if !tc.GetNotNull() {
+								tsType += " | null"
+							}
+							fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
+						}
 					}
-					fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
 				}
 				querier.WriteString("};\n")
 
@@ -223,7 +272,17 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 					for _, c := range q.GetColumns() {
 						from := c.GetName()
 						to := toLowerCamel(from)
-						fmt.Fprintf(querier, "      %s: raw.%s,\n", to, from)
+						if et := c.GetEmbedTable().GetName(); et != "" {
+							fmt.Fprintf(querier, "      %s: {\n", to)
+							for _, tc := range tableMap.m[et].t.GetColumns() {
+								from := tc.GetName()
+								to := toLowerCamel(from)
+								fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
+							}
+							fmt.Fprintf(querier, "      },\n")
+						} else {
+							fmt.Fprintf(querier, "      %s: raw.%s,\n", to, from)
+						}
 					}
 					fmt.Fprintf(querier, "    } : null)")
 				} else {
@@ -233,7 +292,17 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 					for _, c := range q.GetColumns() {
 						from := c.GetName()
 						to := toLowerCamel(from)
-						fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
+						if et := c.GetEmbedTable().GetName(); et != "" {
+							fmt.Fprintf(querier, "        %s: {\n", to)
+							for _, tc := range tableMap.m[et].t.GetColumns() {
+								from := tc.GetName()
+								to := toLowerCamel(from)
+								fmt.Fprintf(querier, "          %s: raw.%s,\n", to, from)
+							}
+							fmt.Fprintf(querier, "        },\n")
+						} else {
+							fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
+						}
 					}
 					fmt.Fprintf(querier, "      }}) : undefined,\n")
 					fmt.Fprintf(querier, "    }})")
@@ -244,14 +313,57 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 
 			querier.WriteByte('\n')
 		}
-		files = append(files, &codegen.File{Name: "querier.ts", Contents: querier.Bytes()})
+		if len(imports) > 0 {
+			var models []string
+			for k := range imports {
+				models = append(models, k)
+			}
+			sort.Strings(models)
+			fmt.Fprintf(header, "import { %s } from \"./models\"\n", strings.Join(models, ", "))
+		}
+		if header.Len() > 0 {
+			header.WriteString("\n")
+		}
+		files = append(files, &plugin.File{Name: "querier.ts", Contents: append(header.Bytes(), querier.Bytes()...)})
 	}
 
-	return &codegen.Response{
+	return &plugin.CodeGenResponse{
 		Files: files,
 	}, nil
 }
 
+type Handler func(*plugin.CodeGenRequest) (*plugin.CodeGenResponse, error)
+
+func run(h Handler) error {
+	var req plugin.CodeGenRequest
+	reqBlob, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return err
+	}
+	if err := req.UnmarshalVT(reqBlob); err != nil {
+		return err
+	}
+	resp, err := h(&req)
+	if err != nil {
+		return err
+	}
+	respBlob, err := resp.MarshalVT()
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriter(os.Stdout)
+	if _, err := w.Write(respBlob); err != nil {
+		return err
+	}
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
-	codegen.Run(handler)
+	if err := run(handler); err != nil {
+		fmt.Fprintf(os.Stderr, "error generating output: %s", err)
+		os.Exit(2)
+	}
 }

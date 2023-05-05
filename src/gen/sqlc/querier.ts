@@ -1,3 +1,5 @@
+import { Account } from "./models"
+
 const getAccountQuery = `-- name: GetAccount :one
 SELECT pk, id, display_name, email FROM account WHERE id = ?1`;
 
@@ -36,13 +38,10 @@ export async function getAccount(
 }
 
 const listAccountsQuery = `-- name: ListAccounts :many
-SELECT pk, id, display_name, email FROM account`;
+SELECT account.pk, account.id, account.display_name, account.email FROM account`;
 
 export type ListAccountsRow = {
-  pk: number;
-  id: string;
-  displayName: string;
-  email: string | null;
+  account: Account;
 };
 
 type RawListAccountsRow = {
@@ -61,10 +60,12 @@ export async function listAccounts(
     .then((r: D1Result<RawListAccountsRow>) => { return {
       ...r,
       results: r.results ? r.results.map((raw: RawListAccountsRow) => { return {
-        pk: raw.pk,
-        id: raw.id,
-        displayName: raw.display_name,
-        email: raw.email,
+        account: {
+          pk: raw.pk,
+          id: raw.id,
+          displayName: raw.display_name,
+          email: raw.email,
+        },
       }}) : undefined,
     }});
 }

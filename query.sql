@@ -2,7 +2,7 @@
 SELECT * FROM account WHERE id = @account_id;
 
 -- name: ListAccounts :many
-SELECT * FROM account;
+SELECT sqlc_embed(account) FROM account;
 
 -- name: CreateAccount :exec
 INSERT INTO account (id, display_name, email)
