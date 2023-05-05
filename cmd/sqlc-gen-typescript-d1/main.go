@@ -13,50 +13,99 @@ import (
 	"github.com/orisano/sqlc-gen-typescript-d1/codegen/plugin"
 )
 
+// TableMap はスキーマのテーブルの情報を検索可能なマップ
 type TableMap struct {
-	m map[string]*ColumnMap
+	m map[string]*tableMapEntry
 }
 
-func (m *TableMap) find(c *plugin.Column) *plugin.Column {
+func (m *TableMap) findColumn(c *plugin.Column) *plugin.Column {
 	t := c.GetTable()
 	if t == nil {
 		return nil
 	}
-	cm := m.m[t.GetName()]
-	if cm == nil {
+	table := m.m[t.GetName()]
+	if table == nil {
 		return nil
 	}
-	return cm.m[c.GetName()]
+	return table.m[c.GetName()]
 }
 
-type ColumnMap struct {
+func (m *TableMap) findTable(table *plugin.Identifier) *plugin.Table {
+	t := m.m[table.GetName()]
+	if t == nil {
+		return nil
+	}
+	return t.t
+}
+
+type tableMapEntry struct {
 	t *plugin.Table
 	m map[string]*plugin.Column
 }
 
 func buildTableMap(catalog *plugin.Catalog) TableMap {
 	tm := TableMap{
-		m: map[string]*ColumnMap{},
+		m: map[string]*tableMapEntry{},
 	}
 	for _, schema := range catalog.GetSchemas() {
 		for _, table := range schema.GetTables() {
-			cm := ColumnMap{
+			e := tableMapEntry{
 				t: table,
 				m: map[string]*plugin.Column{},
 			}
 			for _, column := range table.GetColumns() {
-				cm.m[column.GetName()] = column
+				e.m[column.GetName()] = column
 			}
-			tm.m[table.GetRel().GetName()] = &cm
+			tm.m[table.GetRel().GetName()] = &e
 		}
 	}
 	return tm
 }
 
+// parseOption はクオートされたカンマ区切りの`key=value`形式の入力を受け取りマップとして返す
+// 例: `"foo1=bar,foo2=buz"` => map[string]string{"foo1": "bar", "foo2": "buz"}
+func parseOption(opt []byte) map[string]string {
+	m := map[string]string{}
+	if len(opt) == 0 {
+		return m
+	}
+	s, _ := strconv.Unquote(string(opt))
+	for _, kv := range strings.Split(s, ",") {
+		k, v, _ := strings.Cut(kv, "=")
+		m[k] = v
+	}
+	return m
+}
+
+type TsTypeMap struct {
+	m map[string]string
+}
+
+func (t *TsTypeMap) toTsType(col *plugin.Column) string {
+	dbType := col.GetType().GetName()
+	tsType := t.m[dbType]
+	if !col.GetNotNull() {
+		tsType += " | null"
+	}
+	return tsType
+}
+
+func buildTsTypeMap(settings *plugin.Settings) *TsTypeMap {
+	m := map[string]string{
+		"INTEGER":  "number",
+		"TEXT":     "string",
+		"DATETIME": "string",
+		"JSON":     "string",
+	}
+	for _, o := range settings.GetOverrides() {
+		m[o.GetDbType()] = o.GetCodeType()
+	}
+	return &TsTypeMap{m: m}
+}
+
 func toUpperCamel(snake string) string {
-	tokens := strings.Split(snake, "_")
 	var b strings.Builder
-	for _, t := range tokens {
+	for _, t := range strings.Split(snake, "_") {
 		b.WriteString(strings.ToUpper(t[:1]) + t[1:])
 	}
 	return b.String()
@@ -67,15 +116,53 @@ func toLowerCamel(snake string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
+type Naming struct{}
+
+// toModelTypeName は models.ts に出力されるモデルの型名を返す
+func (Naming) toModelTypeName(table *plugin.Identifier) string {
+	return toUpperCamel(table.GetName())
+}
+
+// toPropertyName は TypeScript のプロパティの名前を返す
+func (Naming) toPropertyName(col *plugin.Column) string {
+	return toLowerCamel(col.GetName())
+}
+
+// toConstQueryName はクエリ文字列の定数の名前を返す
+func (Naming) toConstQueryName(q *plugin.Query) string {
+	return toLowerCamel(q.GetName()) + "Query"
+}
+
+// toParamsTypeName はクエリのパラメータ型の名前を返す
+func (Naming) toParamsTypeName(q *plugin.Query) string {
+	return q.GetName() + "Params"
+}
+
+// toQueryRowTypeName はクエリの結果型の名前を返す
+func (Naming) toQueryRowTypeName(q *plugin.Query) string {
+	return q.GetName() + "Row"
+}
+
+// toRawQueryRowTypeName はクエリの内部結果型の名前を返す
+func (Naming) toRawQueryRowTypeName(q *plugin.Query) string {
+	return "Raw" + q.GetName() + "Row"
+}
+
+// toEmbedColumnName は sqlc_embed が使われたときのカラム名を返す
+func (Naming) toEmbedColumnName(e *plugin.Identifier, c *plugin.Column) string {
+	// MEMO: "_" 1つだと最悪他のカラム名と衝突してしまいそう
+	return e.GetName() + "_" + c.GetName()
+}
+
+// toFunctionName はクエリ関数の関数名を返す
+func (Naming) toFunctionName(q *plugin.Query) string {
+	return toLowerCamel(q.GetName())
+}
+
+var naming Naming
+
 func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
-	options := map[string]string{}
-	if pOpt := string(request.GetPluginOptions()); len(pOpt) > 0 {
-		s, _ := strconv.Unquote(pOpt)
-		for _, kv := range strings.Split(s, ",") {
-			k, v, _ := strings.Cut(kv, "=")
-			options[k] = v
-		}
-	}
+	options := parseOption(request.GetPluginOptions())
 	workersTypesVersion := "2022-11-30"
 	if v, ok := options["workers-types"]; ok {
 		workersTypesVersion = v
@@ -85,30 +172,18 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		workersTypesV3 = v == "1"
 	}
 
+	tsTypeMap := buildTsTypeMap(request.GetSettings())
 	var files []*plugin.File
-	tsTypeMap := map[string]string{
-		"INTEGER":  "number",
-		"TEXT":     "string",
-		"DATETIME": "string",
-		"JSON":     "string",
-	}
-	for _, o := range request.GetSettings().GetOverrides() {
-		tsTypeMap[o.GetDbType()] = o.GetCodeType()
-	}
-
 	{
+		// sqlc_embed の際にスキーマの型が必要になるので models.ts として書き出す
 		models := bytes.NewBuffer(nil)
 		for _, s := range request.GetCatalog().GetSchemas() {
 			for _, t := range s.GetTables() {
-				modelName := toUpperCamel(t.GetRel().GetName())
+				modelName := naming.toModelTypeName(t.GetRel())
 				fmt.Fprintf(models, "export type %s = {\n", modelName)
 				for _, c := range t.GetColumns() {
-					colName := toLowerCamel(c.GetName())
-					sqliteType := c.GetType().GetName()
-					tsType := tsTypeMap[sqliteType]
-					if !c.GetNotNull() {
-						tsType += " | null"
-					}
+					colName := naming.toPropertyName(c)
+					tsType := tsTypeMap.toTsType(c)
 					fmt.Fprintf(models, "  %s: %s;\n", colName, tsType)
 				}
 				fmt.Fprintf(models, "};\n\n")
@@ -131,24 +206,25 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		if !workersTypesV3 {
 			header.WriteString("import { D1Database, D1Result } from \"" + workersTypesPackage + "\"\n")
 		}
-		imports := map[string]bool{}
 
+		requireModels := map[string]bool{}
 		const embedSep = "_"
 
 		for _, q := range request.GetQueries() {
-			name := q.GetName()
-			lowerName := strings.ToLower(name[:1]) + name[1:]
-
 			queryText := q.GetText()
+			// sqlc_embed はカラムを x.a, x.b, x.c のような形で展開する
+			// 複数の sqlc_embed が展開された結果、重複した名前のカラムの情報が得られない処理系がある
+			// そのため x.a AS x_a, x.b AS x_b, x.c AS x_c のようにクエリを書き換えることで問題を回避する
+			// カラムを一つずつ書き換えた場合に前方一致や後方一致を考慮する必要があるのでまとめて書き換えを行う
 			for _, c := range q.GetColumns() {
-				e := c.GetEmbedTable().GetName()
-				if e == "" {
+				et := c.GetEmbedTable()
+				if et.GetName() == "" {
 					continue
 				}
 				var news, olds []string
-				for _, tc := range tableMap.m[e].t.GetColumns() {
-					from := e + "." + tc.GetName()
-					to := from + " AS " + e + embedSep + tc.GetName()
+				for _, ec := range tableMap.findTable(et).GetColumns() {
+					from := et.GetName() + "." + ec.GetName()
+					to := from + " AS " + naming.toEmbedColumnName(et, ec)
 					olds = append(olds, from)
 					news = append(news, to)
 				}
@@ -156,24 +232,23 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 
 			query := "-- name: " + q.GetName() + " " + q.GetCmd() + "\n" + queryText
-			fmt.Fprintf(querier, "const %sQuery = `%s`;\n", lowerName, query)
+			fmt.Fprintf(querier, "const %s = `%s`;\n", naming.toConstQueryName(q), query)
 
 			querier.WriteByte('\n')
 
+			// パラメータが0個の場合は引数から削除するので型を生成しない
 			if len(q.GetParams()) > 0 {
-				fmt.Fprintf(querier, "export type %sParams = {\n", name)
+				fmt.Fprintf(querier, "export type %s = {\n", naming.toParamsTypeName(q))
 				for _, p := range q.GetParams() {
-					paramName := toLowerCamel(p.GetColumn().GetName())
-					sqliteType := p.GetColumn().GetType().GetName()
-					tsType := tsTypeMap[sqliteType]
-					nullable := false
-					if c := p.GetColumn(); !c.GetNotNull() {
-						nullable = true
-					} else if tc := tableMap.find(c); tc != nil && !tc.GetNotNull() {
-						nullable = true
-					}
-					if nullable {
-						tsType += " | null"
+					c := p.GetColumn()
+					paramName := naming.toPropertyName(c)
+					tsType := tsTypeMap.toTsType(c)
+					// パラメーターは sqlc_narg を使った場合のみ nullable
+					if c.GetNotNull() {
+						// パラメーターに対応するカラムがわかっていて、スキーマ上で nullable であればパラメータを nullable とする
+						if tc := tableMap.findColumn(c); tc != nil && !tc.GetNotNull() {
+							tsType += " | null"
+						}
 					}
 					fmt.Fprintf(querier, "  %s: %s;\n", paramName, tsType)
 				}
@@ -183,56 +258,53 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 
 			needRawType := false
-			rowType := name + "Row"
-
+			// :exec はレスポンスが返ってこないので型を生成しない
 			if q.GetCmd() != ":exec" {
-				fmt.Fprintf(querier, "export type %s = {\n", rowType)
-				for _, c := range q.GetColumns() {
-					originalColName := c.GetName()
-					colName := toLowerCamel(originalColName)
-					if originalColName != colName {
-						needRawType = true
-					}
-					tsType := ""
-					if sqliteType := c.GetType().GetName(); sqliteType != "" {
-						tsType = tsTypeMap[sqliteType]
-						if !c.GetNotNull() {
-							tsType += " | null"
-						}
-					} else {
-						needRawType = true
-						tsType = toUpperCamel(c.GetEmbedTable().GetName())
-						imports[tsType] = true
-					}
-					fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
-				}
-				querier.WriteString("};\n")
-
-				querier.WriteByte('\n')
-			}
-
-			if needRawType {
-				fmt.Fprintf(querier, "type Raw%s = {\n", rowType)
+				fmt.Fprintf(querier, "export type %s = {\n", naming.toQueryRowTypeName(q))
 				for _, c := range q.GetColumns() {
 					colName := c.GetName()
-					if sqliteType := c.GetType().GetName(); sqliteType != "" {
-						tsType := tsTypeMap[sqliteType]
-						if !c.GetNotNull() {
-							tsType += " | null"
-						}
-						fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
+					propName := naming.toPropertyName(c)
+
+					// カラム名(snake)とプロパティ名(camel)が異なる場合
+					// 生成コードの内部で変換する必要があるのでクエリの内部結果型が必要になる
+					if colName != propName {
+						needRawType = true
+					}
+
+					tsType := ""
+
+					// sqlc_embed が使われている場合
+					// 生成コードの内部で変換する必要があるのでクエリの内部結果型が必要になる
+					if et := c.GetEmbedTable(); et.GetName() != "" {
+						needRawType = true
+						tsType = naming.toModelTypeName(et)
+						// models.ts から import が必要になる
+						requireModels[tsType] = true
 					} else {
-						et := c.GetEmbedTable().GetName()
-						t := tableMap.m[et]
-						for _, tc := range t.t.GetColumns() {
-							colName := et + embedSep + tc.GetName()
-							sqliteType := tc.GetType().GetName()
-							tsType := tsTypeMap[sqliteType]
-							if !tc.GetNotNull() {
-								tsType += " | null"
-							}
+						tsType = tsTypeMap.toTsType(c)
+					}
+					fmt.Fprintf(querier, "  %s: %s;\n", propName, tsType)
+				}
+				querier.WriteString("};\n")
+
+				querier.WriteByte('\n')
+			}
+
+			// 內部結果型が必要な場合のみ生成する
+			if needRawType {
+				fmt.Fprintf(querier, "type %s = {\n", naming.toRawQueryRowTypeName(q))
+				for _, c := range q.GetColumns() {
+					// sqlc_embed の場合、スキーマからカラムの情報を取得し展開する
+					if et := c.GetEmbedTable(); et.GetName() != "" {
+						for _, ec := range tableMap.findTable(et).GetColumns() {
+							colName := naming.toEmbedColumnName(et, ec)
+							tsType := tsTypeMap.toTsType(ec)
 							fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
 						}
+					} else {
+						colName := c.GetName()
+						tsType := tsTypeMap.toTsType(c)
+						fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
 					}
 				}
 				querier.WriteString("};\n")
@@ -240,12 +312,17 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				querier.WriteByte('\n')
 			}
 
-			var retType, resultType string
+			rowType := naming.toQueryRowTypeName(q)
+			// retType は関数の戻り値の型
+			var retType string
+			// resultType は SQLite からの戻り値の型
+			var resultType string
+
 			if cmd := q.GetCmd(); cmd == ":one" {
 				retType = rowType + " | null"
 				resultType = retType
 				if needRawType {
-					resultType = "Raw" + rowType + " | null"
+					resultType = naming.toRawQueryRowTypeName(q) + " | null"
 				}
 			} else if cmd == ":exec" {
 				retType = "D1Result"
@@ -253,27 +330,28 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				retType = "D1Result<" + rowType + ">"
 				resultType = rowType
 				if needRawType {
-					resultType = "Raw" + rowType
+					resultType = naming.toRawQueryRowTypeName(q)
 				}
 			}
 
-			fmt.Fprintf(querier, "export async function %s(\n", lowerName)
+			fmt.Fprintf(querier, "export async function %s(\n", naming.toFunctionName(q))
 			fmt.Fprintf(querier, "  d1: D1Database")
+			// パラメータがないときは引数を追加しない
 			if len(q.GetParams()) > 0 {
 				querier.WriteString(",\n")
-				fmt.Fprintf(querier, "  args: %sParams", name)
+				fmt.Fprintf(querier, "  args: %s", naming.toParamsTypeName(q))
 			}
 			querier.WriteString("\n")
 			fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
 			fmt.Fprintf(querier, "  return await d1\n")
-			fmt.Fprintf(querier, "    .prepare(%sQuery)\n", lowerName)
+			fmt.Fprintf(querier, "    .prepare(%s)\n", naming.toConstQueryName(q))
 			if len(q.GetParams()) > 0 {
 				querier.WriteString("    .bind(")
 				for i, p := range q.GetParams() {
 					if i > 0 {
 						querier.WriteString(", ")
 					}
-					querier.WriteString("args." + toLowerCamel(p.GetColumn().GetName()))
+					querier.WriteString("args." + naming.toPropertyName(p.GetColumn()))
 				}
 				querier.WriteString(")\n")
 			}
@@ -285,19 +363,22 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			case ":exec":
 				fmt.Fprintf(querier, "    .run()")
 			}
+
+			// 內部結果型を使っている場合は結果型に変換する処理を生成する
 			if needRawType {
 				querier.WriteByte('\n')
-
 				if q.GetCmd() == ":one" {
 					fmt.Fprintf(querier, "    .then((raw: %s) => raw ? {\n", resultType)
 					for _, c := range q.GetColumns() {
 						from := c.GetName()
-						to := toLowerCamel(from)
-						if et := c.GetEmbedTable().GetName(); et != "" {
+						to := naming.toPropertyName(c)
+
+						// sqlc_embed の場合はモデル型に変換する
+						if et := c.GetEmbedTable(); et.GetName() != "" {
 							fmt.Fprintf(querier, "      %s: {\n", to)
-							for _, tc := range tableMap.m[et].t.GetColumns() {
-								from := et + embedSep + tc.GetName()
-								to := toLowerCamel(tc.GetName())
+							for _, ec := range tableMap.findTable(et).GetColumns() {
+								from := naming.toEmbedColumnName(et, ec)
+								to := naming.toPropertyName(ec)
 								fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
 							}
 							fmt.Fprintf(querier, "      },\n")
@@ -312,12 +393,12 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
 					for _, c := range q.GetColumns() {
 						from := c.GetName()
-						to := toLowerCamel(from)
-						if et := c.GetEmbedTable().GetName(); et != "" {
+						to := naming.toPropertyName(c)
+						if et := c.GetEmbedTable(); et.GetName() != "" {
 							fmt.Fprintf(querier, "        %s: {\n", to)
-							for _, tc := range tableMap.m[et].t.GetColumns() {
-								from := et + embedSep + tc.GetName()
-								to := toLowerCamel(tc.GetName())
+							for _, ec := range tableMap.findTable(et).GetColumns() {
+								from := naming.toEmbedColumnName(et, ec)
+								to := naming.toPropertyName(ec)
 								fmt.Fprintf(querier, "          %s: raw.%s,\n", to, from)
 							}
 							fmt.Fprintf(querier, "        },\n")
@@ -334,9 +415,9 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 			querier.WriteByte('\n')
 		}
-		if len(imports) > 0 {
+		if len(requireModels) > 0 {
 			var models []string
-			for k := range imports {
+			for k := range requireModels {
 				models = append(models, k)
 			}
 			sort.Strings(models)
