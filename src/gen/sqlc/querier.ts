@@ -38,17 +38,17 @@ export async function getAccount(
 }
 
 const listAccountsQuery = `-- name: ListAccounts :many
-SELECT account.pk, account.id, account.display_name, account.email FROM account`;
+SELECT account.pk AS account_pk, account.id AS account_id, account.display_name AS account_display_name, account.email AS account_email FROM account`;
 
 export type ListAccountsRow = {
   account: Account;
 };
 
 type RawListAccountsRow = {
-  pk: number;
-  id: string;
-  display_name: string;
-  email: string | null;
+  account_pk: number;
+  account_id: string;
+  account_display_name: string;
+  account_email: string | null;
 };
 
 export async function listAccounts(
@@ -61,10 +61,10 @@ export async function listAccounts(
       ...r,
       results: r.results ? r.results.map((raw: RawListAccountsRow) => { return {
         account: {
-          pk: raw.pk,
-          id: raw.id,
-          displayName: raw.display_name,
-          email: raw.email,
+          pk: raw.account_pk,
+          id: raw.account_id,
+          displayName: raw.account_display_name,
+          email: raw.account_email,
         },
       }}) : undefined,
     }});

@@ -87,8 +87,10 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 	var files []*plugin.File
 	tsTypeMap := map[string]string{
-		"INTEGER": "number",
-		"TEXT":    "string",
+		"INTEGER":  "number",
+		"TEXT":     "string",
+		"DATETIME": "string",
+		"JSON":     "string",
 	}
 	for _, o := range request.GetSettings().GetOverrides() {
 		tsTypeMap[o.GetDbType()] = o.GetCodeType()
@@ -135,7 +137,23 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			name := q.GetName()
 			lowerName := strings.ToLower(name[:1]) + name[1:]
 
-			query := "-- name: " + q.GetName() + " " + q.GetCmd() + "\n" + q.GetText()
+			queryText := q.GetText()
+			for _, c := range q.GetColumns() {
+				e := c.GetEmbedTable().GetName()
+				if e == "" {
+					continue
+				}
+				var news, olds []string
+				for _, tc := range tableMap.m[e].t.GetColumns() {
+					from := e + "." + tc.GetName()
+					to := from + " AS " + e + "_" + tc.GetName()
+					olds = append(olds, from)
+					news = append(news, to)
+				}
+				queryText = strings.Replace(queryText, strings.Join(olds, ", "), strings.Join(news, ", "), 1)
+			}
+
+			query := "-- name: " + q.GetName() + " " + q.GetCmd() + "\n" + queryText
 			fmt.Fprintf(querier, "const %sQuery = `%s`;\n", lowerName, query)
 
 			querier.WriteByte('\n')
@@ -202,9 +220,10 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 						}
 						fmt.Fprintf(querier, "  %s: %s;\n", colName, tsType)
 					} else {
-						t := tableMap.m[c.GetEmbedTable().GetName()]
+						et := c.GetEmbedTable().GetName()
+						t := tableMap.m[et]
 						for _, tc := range t.t.GetColumns() {
-							colName := tc.GetName()
+							colName := et + "_" + tc.GetName()
 							sqliteType := tc.GetType().GetName()
 							tsType := tsTypeMap[sqliteType]
 							if !tc.GetNotNull() {
@@ -275,8 +294,8 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 						if et := c.GetEmbedTable().GetName(); et != "" {
 							fmt.Fprintf(querier, "      %s: {\n", to)
 							for _, tc := range tableMap.m[et].t.GetColumns() {
-								from := tc.GetName()
-								to := toLowerCamel(from)
+								from := et + "_" + tc.GetName()
+								to := toLowerCamel(tc.GetName())
 								fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
 							}
 							fmt.Fprintf(querier, "      },\n")
@@ -295,8 +314,8 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 						if et := c.GetEmbedTable().GetName(); et != "" {
 							fmt.Fprintf(querier, "        %s: {\n", to)
 							for _, tc := range tableMap.m[et].t.GetColumns() {
-								from := tc.GetName()
-								to := toLowerCamel(from)
+								from := et + "_" + tc.GetName()
+								to := toLowerCamel(tc.GetName())
 								fmt.Fprintf(querier, "          %s: raw.%s,\n", to, from)
 							}
 							fmt.Fprintf(querier, "        },\n")
