@@ -79,9 +79,13 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 
 	var files []*codegen.File
 	tsTypeMap := map[string]string{
-		"INTEGER": "bigint",
+		"INTEGER": "number",
 		"TEXT":    "string",
 	}
+	for _, o := range request.GetSettings().GetOverrides() {
+		tsTypeMap[o.GetDbType()] = o.GetCodeType()
+	}
+
 	{
 		querier := bytes.NewBuffer(nil)
 

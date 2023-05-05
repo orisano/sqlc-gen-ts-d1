@@ -6,14 +6,14 @@ export type GetAccountParams = {
 };
 
 export type GetAccountRow = {
-  pk: bigint;
+  pk: number;
   id: string;
   displayName: string;
   email: string | null;
 };
 
 type RawGetAccountRow = {
-  pk: bigint;
+  pk: number;
   id: string;
   display_name: string;
   email: string | null;
@@ -39,14 +39,14 @@ const listAccountsQuery = `-- name: ListAccounts :many
 SELECT pk, id, display_name, email FROM account`;
 
 export type ListAccountsRow = {
-  pk: bigint;
+  pk: number;
   id: string;
   displayName: string;
   email: string | null;
 };
 
 type RawListAccountsRow = {
-  pk: bigint;
+  pk: number;
   id: string;
   display_name: string;
   email: string | null;
@@ -101,14 +101,14 @@ export type UpdateAccountDisplayNameParams = {
 };
 
 export type UpdateAccountDisplayNameRow = {
-  pk: bigint;
+  pk: number;
   id: string;
   displayName: string;
   email: string | null;
 };
 
 type RawUpdateAccountDisplayNameRow = {
-  pk: bigint;
+  pk: number;
   id: string;
   display_name: string;
   email: string | null;
