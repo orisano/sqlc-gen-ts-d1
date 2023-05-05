@@ -10,6 +10,44 @@ import (
 	"github.com/tabbed/sqlc-go/codegen"
 )
 
+type TableMap struct {
+	m map[string]*ColumnMap
+}
+
+func (m *TableMap) find(c *codegen.Column) *codegen.Column {
+	t := c.GetTable()
+	if t == nil {
+		return nil
+	}
+	cm := m.m[t.GetName()]
+	if cm == nil {
+		return nil
+	}
+	return cm.m[c.GetName()]
+}
+
+type ColumnMap struct {
+	m map[string]*codegen.Column
+}
+
+func buildTableMap(catalog *codegen.Catalog) TableMap {
+	tm := TableMap{
+		m: map[string]*ColumnMap{},
+	}
+	for _, schema := range catalog.GetSchemas() {
+		for _, table := range schema.GetTables() {
+			cm := ColumnMap{
+				m: map[string]*codegen.Column{},
+			}
+			for _, column := range table.GetColumns() {
+				cm.m[column.GetName()] = column
+			}
+			tm.m[table.GetRel().GetName()] = &cm
+		}
+	}
+	return tm
+}
+
 func toLowerCamel(snake string) string {
 	tokens := strings.Split(snake, "_")
 
@@ -47,6 +85,8 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 	{
 		querier := bytes.NewBuffer(nil)
 
+		tableMap := buildTableMap(request.GetCatalog())
+
 		workersTypesPackage := "@cloudflare/workers-types"
 		if workersTypesVersion != "" {
 			workersTypesPackage += "/" + workersTypesVersion
@@ -70,7 +110,13 @@ func handler(ctx context.Context, request *codegen.Request) (*codegen.Response, 
 				paramName := toLowerCamel(p.GetColumn().GetName())
 				sqliteType := p.GetColumn().GetType().GetName()
 				tsType := tsTypeMap[sqliteType]
-				if !p.GetColumn().GetNotNull() {
+				nullable := false
+				if c := p.GetColumn(); !c.GetNotNull() {
+					nullable = true
+				} else if tc := tableMap.find(c); tc != nil && !tc.GetNotNull() {
+					nullable = true
+				}
+				if nullable {
 					tsType += " | null"
 				}
 				fmt.Fprintf(querier, "  %s: %s;\n", paramName, tsType)
