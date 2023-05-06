@@ -84,6 +84,9 @@ type TsTypeMap struct {
 func (t *TsTypeMap) toTsType(col *plugin.Column) string {
 	dbType := col.GetType().GetName()
 	tsType := t.m[dbType]
+	if col.GetIsSqlcSlice() {
+		tsType += "[]"
+	}
 	if !col.GetNotNull() {
 		tsType += " | null"
 	}
@@ -161,6 +164,29 @@ func (Naming) toFunctionName(q *plugin.Query) string {
 
 var naming Naming
 
+func hasSqlcSlice(q *plugin.Query) bool {
+	for _, p := range q.GetParams() {
+		if p.GetColumn().GetIsSqlcSlice() {
+			return true
+		}
+	}
+	return false
+}
+
+func bindArgs(q *plugin.Query) string {
+	var args strings.Builder
+	for i, p := range q.GetParams() {
+		if i > 0 {
+			args.WriteString(", ")
+		}
+		args.WriteString("args." + naming.toPropertyName(p.GetColumn()))
+		if p.GetColumn().GetIsSqlcSlice() {
+			args.WriteString("[0]")
+		}
+	}
+	return args.String()
+}
+
 func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	options := parseOption(request.GetPluginOptions())
 	workersTypesVersion := "2022-11-30"
@@ -208,6 +234,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		}
 
 		requireModels := map[string]bool{}
+		requireExpandedParams := false
 
 		for _, q := range request.GetQueries() {
 			queryText := q.GetText()
@@ -342,16 +369,35 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 			querier.WriteString("\n")
 			fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
+
+			var queryVar string
+			var binds string
+			if hasSqlcSlice(q) {
+				fmt.Fprintf(querier, "  let query = %s;\n", naming.toConstQueryName(q))
+				fmt.Fprintf(querier, "  const params: any[] = [%s];\n", bindArgs(q))
+				for _, p := range q.GetParams() {
+					c := p.GetColumn()
+					if !c.GetIsSqlcSlice() {
+						continue
+					}
+					n := p.GetNumber()
+					propName := naming.toPropertyName(c)
+					fmt.Fprintf(querier, "  query = query.replace(\"(?%d)\", expandedParam(%d, args.%s.length, params.length))\n", n, n, propName)
+					fmt.Fprintf(querier, "  params.push(...args.%s.slice(1));\n", propName)
+				}
+				queryVar = "query"
+				binds = "...params"
+				requireExpandedParams = true
+			} else {
+				queryVar = naming.toConstQueryName(q)
+				binds = bindArgs(q)
+			}
+
 			fmt.Fprintf(querier, "  return await d1\n")
-			fmt.Fprintf(querier, "    .prepare(%s)\n", naming.toConstQueryName(q))
+			fmt.Fprintf(querier, "    .prepare(%s)\n", queryVar)
 			if len(q.GetParams()) > 0 {
 				querier.WriteString("    .bind(")
-				for i, p := range q.GetParams() {
-					if i > 0 {
-						querier.WriteString(", ")
-					}
-					querier.WriteString("args." + naming.toPropertyName(p.GetColumn()))
-				}
+				querier.WriteString(binds)
 				querier.WriteString(")\n")
 			}
 			switch q.GetCmd() {
@@ -414,6 +460,18 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 			querier.WriteByte('\n')
 		}
+
+		if requireExpandedParams {
+			querier.WriteString(`function expandedParam(n: number, len: number, last: number): string {
+    const params: number[] = [n];
+    for (let i = 1; i < len; i++) {
+        params.push(last + i);
+    }
+    return "(" + params.map((x: number) => "?" + x).join(", ") + ")"
+}
+`)
+		}
+
 		if len(requireModels) > 0 {
 			var models []string
 			for k := range requireModels {

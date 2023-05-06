@@ -1,5 +1,49 @@
 import { Account } from "./models"
 
+const getAccountsQuery = `-- name: GetAccounts :many
+SELECT pk, id, display_name, email FROM account WHERE id IN (?1)`;
+
+export type GetAccountsParams = {
+  ids: string[];
+};
+
+export type GetAccountsRow = {
+  pk: number;
+  id: string;
+  displayName: string;
+  email: string | null;
+};
+
+type RawGetAccountsRow = {
+  pk: number;
+  id: string;
+  display_name: string;
+  email: string | null;
+};
+
+export async function getAccounts(
+  d1: D1Database,
+  args: GetAccountsParams
+): Promise<D1Result<GetAccountsRow>> {
+  let query = getAccountsQuery;
+  const params: any[] = [args.ids[0]];
+  query = query.replace("(?1)", expandedParam(1, args.ids.length, params.length))
+  params.push(...args.ids.slice(1));
+  return await d1
+    .prepare(query)
+    .bind(...params)
+    .all<RawGetAccountsRow>()
+    .then((r: D1Result<RawGetAccountsRow>) => { return {
+      ...r,
+      results: r.results ? r.results.map((raw: RawGetAccountsRow) => { return {
+        pk: raw.pk,
+        id: raw.id,
+        displayName: raw.display_name,
+        email: raw.email,
+      }}) : undefined,
+    }});
+}
+
 const getAccountQuery = `-- name: GetAccount :one
 SELECT pk, id, display_name, email FROM account WHERE id = ?1`;
 
@@ -131,3 +175,10 @@ export async function updateAccountDisplayName(
     } : null);
 }
 
+function expandedParam(n: number, len: number, last: number): string {
+    const params: number[] = [n];
+    for (let i = 1; i < len; i++) {
+        params.push(last + i);
+    }
+    return "(" + params.map((x: number) => "?" + x).join(", ") + ")"
+}

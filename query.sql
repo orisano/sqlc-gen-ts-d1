@@ -13,3 +13,6 @@ UPDATE account
 SET display_name = @display_name
 WHERE id = @id
 RETURNING *;
+
+-- name: GetAccounts :many
+SELECT * FROM account WHERE id IN (sqlc_slice(ids));
