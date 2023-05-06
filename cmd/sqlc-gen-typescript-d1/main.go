@@ -208,7 +208,6 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		}
 
 		requireModels := map[string]bool{}
-		const embedSep = "_"
 
 		for _, q := range request.GetQueries() {
 			queryText := q.GetText()
