@@ -173,7 +173,7 @@ func hasSqlcSlice(q *plugin.Query) bool {
 	return false
 }
 
-func bindArgs(q *plugin.Query) string {
+func buildBindArgs(q *plugin.Query) string {
 	var args strings.Builder
 	for i, p := range q.GetParams() {
 		if i > 0 {
@@ -185,6 +185,25 @@ func bindArgs(q *plugin.Query) string {
 		}
 	}
 	return args.String()
+}
+
+func writeFromRawMapping(w *bytes.Buffer, indent string, tableMap TableMap, q *plugin.Query) {
+	for _, c := range q.GetColumns() {
+		propName := naming.toPropertyName(c)
+		// sqlc_embed の場合はモデル型に変換する
+		if et := c.GetEmbedTable(); et.GetName() != "" {
+			fmt.Fprintf(w, "%s%s: {\n", indent, propName)
+			for _, ec := range tableMap.findTable(et).GetColumns() {
+				from := naming.toEmbedColumnName(et, ec)
+				to := naming.toPropertyName(ec)
+				fmt.Fprintf(w, "%s  %s: raw.%s,\n", indent, to, from)
+			}
+			fmt.Fprintf(w, "%s},\n", indent)
+		} else {
+			from := c.GetName()
+			fmt.Fprintf(w, "%s%s: raw.%s,\n", indent, propName, from)
+		}
+	}
 }
 
 func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
@@ -374,7 +393,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			var binds string
 			if hasSqlcSlice(q) {
 				fmt.Fprintf(querier, "  let query = %s;\n", naming.toConstQueryName(q))
-				fmt.Fprintf(querier, "  const params: any[] = [%s];\n", bindArgs(q))
+				fmt.Fprintf(querier, "  const params: any[] = [%s];\n", buildBindArgs(q))
 				for _, p := range q.GetParams() {
 					c := p.GetColumn()
 					if !c.GetIsSqlcSlice() {
@@ -382,7 +401,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					}
 					n := p.GetNumber()
 					propName := naming.toPropertyName(c)
-					fmt.Fprintf(querier, "  query = query.replace(\"(?%d)\", expandedParam(%d, args.%s.length, params.length))\n", n, n, propName)
+					fmt.Fprintf(querier, "  query = query.replace(\"(?%d)\", expandedParam(%d, args.%s.length, params.length));\n", n, n, propName)
 					fmt.Fprintf(querier, "  params.push(...args.%s.slice(1));\n", propName)
 				}
 				queryVar = "query"
@@ -390,7 +409,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				requireExpandedParams = true
 			} else {
 				queryVar = naming.toConstQueryName(q)
-				binds = bindArgs(q)
+				binds = buildBindArgs(q)
 			}
 
 			fmt.Fprintf(querier, "  return await d1\n")
@@ -414,43 +433,13 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				querier.WriteByte('\n')
 				if q.GetCmd() == ":one" {
 					fmt.Fprintf(querier, "    .then((raw: %s) => raw ? {\n", resultType)
-					for _, c := range q.GetColumns() {
-						from := c.GetName()
-						to := naming.toPropertyName(c)
-
-						// sqlc_embed の場合はモデル型に変換する
-						if et := c.GetEmbedTable(); et.GetName() != "" {
-							fmt.Fprintf(querier, "      %s: {\n", to)
-							for _, ec := range tableMap.findTable(et).GetColumns() {
-								from := naming.toEmbedColumnName(et, ec)
-								to := naming.toPropertyName(ec)
-								fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
-							}
-							fmt.Fprintf(querier, "      },\n")
-						} else {
-							fmt.Fprintf(querier, "      %s: raw.%s,\n", to, from)
-						}
-					}
+					writeFromRawMapping(querier, "      ", tableMap, q)
 					fmt.Fprintf(querier, "    } : null)")
 				} else {
 					fmt.Fprintf(querier, "    .then((r: D1Result<%s>) => { return {\n", resultType)
 					fmt.Fprintf(querier, "      ...r,\n")
 					fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
-					for _, c := range q.GetColumns() {
-						from := c.GetName()
-						to := naming.toPropertyName(c)
-						if et := c.GetEmbedTable(); et.GetName() != "" {
-							fmt.Fprintf(querier, "        %s: {\n", to)
-							for _, ec := range tableMap.findTable(et).GetColumns() {
-								from := naming.toEmbedColumnName(et, ec)
-								to := naming.toPropertyName(ec)
-								fmt.Fprintf(querier, "          %s: raw.%s,\n", to, from)
-							}
-							fmt.Fprintf(querier, "        },\n")
-						} else {
-							fmt.Fprintf(querier, "        %s: raw.%s,\n", to, from)
-						}
-					}
+					writeFromRawMapping(querier, "        ", tableMap, q)
 					fmt.Fprintf(querier, "      }}) : undefined,\n")
 					fmt.Fprintf(querier, "    }})")
 				}

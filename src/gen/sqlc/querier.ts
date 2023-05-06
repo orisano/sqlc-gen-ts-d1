@@ -158,7 +158,7 @@ export async function getAccounts(
 ): Promise<D1Result<GetAccountsRow>> {
   let query = getAccountsQuery;
   const params: any[] = [args.ids[0]];
-  query = query.replace("(?1)", expandedParam(1, args.ids.length, params.length))
+  query = query.replace("(?1)", expandedParam(1, args.ids.length, params.length));
   params.push(...args.ids.slice(1));
   return await d1
     .prepare(query)
