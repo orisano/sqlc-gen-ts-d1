@@ -269,9 +269,9 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					c := p.GetColumn()
 					paramName := naming.toPropertyName(c)
 					tsType := tsTypeMap.toTsType(c)
-					// パラメーターは sqlc_narg を使った場合のみ nullable
+					// パラメータは sqlc_narg を使った場合のみ nullable
 					if c.GetNotNull() {
-						// パラメーターに対応するカラムがわかっていて、スキーマ上で nullable であればパラメータを nullable とする
+						// パラメータに対応するカラムがわかっていて、スキーマ上で nullable であればパラメータを nullable とする
 						if tc := tableMap.findColumn(c); tc != nil && !tc.GetNotNull() {
 							tsType += " | null"
 						}
