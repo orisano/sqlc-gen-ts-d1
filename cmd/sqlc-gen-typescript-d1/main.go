@@ -390,7 +390,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
 
 			var queryVar string
-			var binds string
+			var bindArgs string
 			if hasSqlcSlice(q) {
 				fmt.Fprintf(querier, "  let query = %s;\n", naming.toConstQueryName(q))
 				fmt.Fprintf(querier, "  const params: any[] = [%s];\n", buildBindArgs(q))
@@ -405,19 +405,17 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					fmt.Fprintf(querier, "  params.push(...args.%s.slice(1));\n", propName)
 				}
 				queryVar = "query"
-				binds = "...params"
+				bindArgs = "...params"
 				requireExpandedParams = true
 			} else {
 				queryVar = naming.toConstQueryName(q)
-				binds = buildBindArgs(q)
+				bindArgs = buildBindArgs(q)
 			}
 
 			fmt.Fprintf(querier, "  return await d1\n")
 			fmt.Fprintf(querier, "    .prepare(%s)\n", queryVar)
 			if len(q.GetParams()) > 0 {
-				querier.WriteString("    .bind(")
-				querier.WriteString(binds)
-				querier.WriteString(")\n")
+				fmt.Fprintf(querier, "    .bind(%s)\n", bindArgs)
 			}
 			switch q.GetCmd() {
 			case ":one":
