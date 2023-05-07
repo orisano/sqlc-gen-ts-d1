@@ -13,199 +13,7 @@ import (
 	"github.com/orisano/sqlc-gen-typescript-d1/codegen/plugin"
 )
 
-// TableMap はスキーマのテーブルの情報を検索可能なマップ
-type TableMap struct {
-	m map[string]*tableMapEntry
-}
-
-func (m *TableMap) findColumn(c *plugin.Column) *plugin.Column {
-	t := c.GetTable()
-	if t == nil {
-		return nil
-	}
-	table := m.m[t.GetName()]
-	if table == nil {
-		return nil
-	}
-	return table.m[c.GetName()]
-}
-
-func (m *TableMap) findTable(table *plugin.Identifier) *plugin.Table {
-	t := m.m[table.GetName()]
-	if t == nil {
-		return nil
-	}
-	return t.t
-}
-
-type tableMapEntry struct {
-	t *plugin.Table
-	m map[string]*plugin.Column
-}
-
-func buildTableMap(catalog *plugin.Catalog) TableMap {
-	tm := TableMap{
-		m: map[string]*tableMapEntry{},
-	}
-	for _, schema := range catalog.GetSchemas() {
-		for _, table := range schema.GetTables() {
-			e := tableMapEntry{
-				t: table,
-				m: map[string]*plugin.Column{},
-			}
-			for _, column := range table.GetColumns() {
-				e.m[column.GetName()] = column
-			}
-			tm.m[table.GetRel().GetName()] = &e
-		}
-	}
-	return tm
-}
-
-// parseOption はクオートされたカンマ区切りの`key=value`形式の入力を受け取りマップとして返す
-// 例: `"foo1=bar,foo2=buz"` => map[string]string{"foo1": "bar", "foo2": "buz"}
-func parseOption(opt []byte) map[string]string {
-	m := map[string]string{}
-	if len(opt) == 0 {
-		return m
-	}
-	s, _ := strconv.Unquote(string(opt))
-	for _, kv := range strings.Split(s, ",") {
-		k, v, _ := strings.Cut(kv, "=")
-		m[k] = v
-	}
-	return m
-}
-
-type TsTypeMap struct {
-	m map[string]string
-}
-
-func (t *TsTypeMap) toTsType(col *plugin.Column) string {
-	dbType := col.GetType().GetName()
-	tsType := t.m[dbType]
-	if col.GetIsSqlcSlice() {
-		tsType += "[]"
-	}
-	if !col.GetNotNull() {
-		tsType += " | null"
-	}
-	return tsType
-}
-
-func buildTsTypeMap(settings *plugin.Settings) *TsTypeMap {
-	m := map[string]string{
-		"INTEGER":  "number",
-		"TEXT":     "string",
-		"DATETIME": "string",
-		"JSON":     "string",
-	}
-	for _, o := range settings.GetOverrides() {
-		m[o.GetDbType()] = o.GetCodeType()
-	}
-	return &TsTypeMap{m: m}
-}
-
-func toUpperCamel(snake string) string {
-	var b strings.Builder
-	for _, t := range strings.Split(snake, "_") {
-		b.WriteString(strings.ToUpper(t[:1]) + t[1:])
-	}
-	return b.String()
-}
-
-func toLowerCamel(snake string) string {
-	s := toUpperCamel(snake)
-	return strings.ToLower(s[:1]) + s[1:]
-}
-
-type Naming struct{}
-
-// toModelTypeName は models.ts に出力されるモデルの型名を返す
-func (Naming) toModelTypeName(table *plugin.Identifier) string {
-	return toUpperCamel(table.GetName())
-}
-
-// toPropertyName は TypeScript のプロパティの名前を返す
-func (Naming) toPropertyName(col *plugin.Column) string {
-	return toLowerCamel(col.GetName())
-}
-
-// toConstQueryName はクエリ文字列の定数の名前を返す
-func (Naming) toConstQueryName(q *plugin.Query) string {
-	return toLowerCamel(q.GetName()) + "Query"
-}
-
-// toParamsTypeName はクエリのパラメータ型の名前を返す
-func (Naming) toParamsTypeName(q *plugin.Query) string {
-	return q.GetName() + "Params"
-}
-
-// toQueryRowTypeName はクエリの結果型の名前を返す
-func (Naming) toQueryRowTypeName(q *plugin.Query) string {
-	return q.GetName() + "Row"
-}
-
-// toRawQueryRowTypeName はクエリの内部結果型の名前を返す
-func (Naming) toRawQueryRowTypeName(q *plugin.Query) string {
-	return "Raw" + q.GetName() + "Row"
-}
-
-// toEmbedColumnName は sqlc_embed が使われたときのカラム名を返す
-func (Naming) toEmbedColumnName(e *plugin.Identifier, c *plugin.Column) string {
-	// MEMO: "_" 1つだと最悪他のカラム名と衝突してしまいそう
-	return e.GetName() + "_" + c.GetName()
-}
-
-// toFunctionName はクエリ関数の関数名を返す
-func (Naming) toFunctionName(q *plugin.Query) string {
-	return toLowerCamel(q.GetName())
-}
-
-var naming Naming
-
-func hasSqlcSlice(q *plugin.Query) bool {
-	for _, p := range q.GetParams() {
-		if p.GetColumn().GetIsSqlcSlice() {
-			return true
-		}
-	}
-	return false
-}
-
-func buildBindArgs(q *plugin.Query) string {
-	var args strings.Builder
-	for i, p := range q.GetParams() {
-		if i > 0 {
-			args.WriteString(", ")
-		}
-		args.WriteString("args." + naming.toPropertyName(p.GetColumn()))
-		if p.GetColumn().GetIsSqlcSlice() {
-			args.WriteString("[0]")
-		}
-	}
-	return args.String()
-}
-
-func writeFromRawMapping(w *bytes.Buffer, indent string, tableMap TableMap, q *plugin.Query) {
-	for _, c := range q.GetColumns() {
-		propName := naming.toPropertyName(c)
-		// sqlc_embed の場合はモデル型に変換する
-		if et := c.GetEmbedTable(); et.GetName() != "" {
-			fmt.Fprintf(w, "%s%s: {\n", indent, propName)
-			for _, ec := range tableMap.findTable(et).GetColumns() {
-				from := naming.toEmbedColumnName(et, ec)
-				to := naming.toPropertyName(ec)
-				fmt.Fprintf(w, "%s  %s: raw.%s,\n", indent, to, from)
-			}
-			fmt.Fprintf(w, "%s},\n", indent)
-		} else {
-			from := c.GetName()
-			fmt.Fprintf(w, "%s%s: raw.%s,\n", indent, propName, from)
-		}
-	}
-}
-
+// handler は sqlc で解析したスキーマとクエリの情報を元に生成するコードの情報を返す
 func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	options := parseOption(request.GetPluginOptions())
 	workersTypesVersion := "2022-11-30"
@@ -476,6 +284,199 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	return &plugin.CodeGenResponse{
 		Files: files,
 	}, nil
+}
+
+// TableMap はスキーマのテーブルの情報を検索可能なマップ
+type TableMap struct {
+	m map[string]*tableMapEntry
+}
+
+func (m *TableMap) findColumn(c *plugin.Column) *plugin.Column {
+	t := c.GetTable()
+	if t == nil {
+		return nil
+	}
+	table := m.m[t.GetName()]
+	if table == nil {
+		return nil
+	}
+	return table.m[c.GetName()]
+}
+
+func (m *TableMap) findTable(table *plugin.Identifier) *plugin.Table {
+	t := m.m[table.GetName()]
+	if t == nil {
+		return nil
+	}
+	return t.t
+}
+
+type tableMapEntry struct {
+	t *plugin.Table
+	m map[string]*plugin.Column
+}
+
+func buildTableMap(catalog *plugin.Catalog) TableMap {
+	tm := TableMap{
+		m: map[string]*tableMapEntry{},
+	}
+	for _, schema := range catalog.GetSchemas() {
+		for _, table := range schema.GetTables() {
+			e := tableMapEntry{
+				t: table,
+				m: map[string]*plugin.Column{},
+			}
+			for _, column := range table.GetColumns() {
+				e.m[column.GetName()] = column
+			}
+			tm.m[table.GetRel().GetName()] = &e
+		}
+	}
+	return tm
+}
+
+// parseOption はクオートされたカンマ区切りの`key=value`形式の入力を受け取りマップとして返す
+// 例: `"foo1=bar,foo2=buz"` => map[string]string{"foo1": "bar", "foo2": "buz"}
+func parseOption(opt []byte) map[string]string {
+	m := map[string]string{}
+	if len(opt) == 0 {
+		return m
+	}
+	s, _ := strconv.Unquote(string(opt))
+	for _, kv := range strings.Split(s, ",") {
+		k, v, _ := strings.Cut(kv, "=")
+		m[k] = v
+	}
+	return m
+}
+
+type TsTypeMap struct {
+	m map[string]string
+}
+
+func (t *TsTypeMap) toTsType(col *plugin.Column) string {
+	dbType := col.GetType().GetName()
+	tsType := t.m[dbType]
+	if col.GetIsSqlcSlice() {
+		tsType += "[]"
+	}
+	if !col.GetNotNull() {
+		tsType += " | null"
+	}
+	return tsType
+}
+
+func buildTsTypeMap(settings *plugin.Settings) *TsTypeMap {
+	m := map[string]string{
+		"INTEGER":  "number",
+		"TEXT":     "string",
+		"DATETIME": "string",
+		"JSON":     "string",
+	}
+	for _, o := range settings.GetOverrides() {
+		m[o.GetDbType()] = o.GetCodeType()
+	}
+	return &TsTypeMap{m: m}
+}
+
+func toUpperCamel(snake string) string {
+	var b strings.Builder
+	for _, t := range strings.Split(snake, "_") {
+		b.WriteString(strings.ToUpper(t[:1]) + t[1:])
+	}
+	return b.String()
+}
+
+func toLowerCamel(snake string) string {
+	s := toUpperCamel(snake)
+	return strings.ToLower(s[:1]) + s[1:]
+}
+
+type Naming struct{}
+
+// toModelTypeName は models.ts に出力されるモデルの型名を返す
+func (Naming) toModelTypeName(table *plugin.Identifier) string {
+	return toUpperCamel(table.GetName())
+}
+
+// toPropertyName は TypeScript のプロパティの名前を返す
+func (Naming) toPropertyName(col *plugin.Column) string {
+	return toLowerCamel(col.GetName())
+}
+
+// toConstQueryName はクエリ文字列の定数の名前を返す
+func (Naming) toConstQueryName(q *plugin.Query) string {
+	return toLowerCamel(q.GetName()) + "Query"
+}
+
+// toParamsTypeName はクエリのパラメータ型の名前を返す
+func (Naming) toParamsTypeName(q *plugin.Query) string {
+	return q.GetName() + "Params"
+}
+
+// toQueryRowTypeName はクエリの結果型の名前を返す
+func (Naming) toQueryRowTypeName(q *plugin.Query) string {
+	return q.GetName() + "Row"
+}
+
+// toRawQueryRowTypeName はクエリの内部結果型の名前を返す
+func (Naming) toRawQueryRowTypeName(q *plugin.Query) string {
+	return "Raw" + q.GetName() + "Row"
+}
+
+// toEmbedColumnName は sqlc_embed が使われたときのカラム名を返す
+func (Naming) toEmbedColumnName(e *plugin.Identifier, c *plugin.Column) string {
+	// MEMO: "_" 1つだと最悪他のカラム名と衝突してしまいそう
+	return e.GetName() + "_" + c.GetName()
+}
+
+// toFunctionName はクエリ関数の関数名を返す
+func (Naming) toFunctionName(q *plugin.Query) string {
+	return toLowerCamel(q.GetName())
+}
+
+var naming Naming
+
+func hasSqlcSlice(q *plugin.Query) bool {
+	for _, p := range q.GetParams() {
+		if p.GetColumn().GetIsSqlcSlice() {
+			return true
+		}
+	}
+	return false
+}
+
+func buildBindArgs(q *plugin.Query) string {
+	var args strings.Builder
+	for i, p := range q.GetParams() {
+		if i > 0 {
+			args.WriteString(", ")
+		}
+		args.WriteString("args." + naming.toPropertyName(p.GetColumn()))
+		if p.GetColumn().GetIsSqlcSlice() {
+			args.WriteString("[0]")
+		}
+	}
+	return args.String()
+}
+
+func writeFromRawMapping(w *bytes.Buffer, indent string, tableMap TableMap, q *plugin.Query) {
+	for _, c := range q.GetColumns() {
+		propName := naming.toPropertyName(c)
+		// sqlc_embed の場合はモデル型に変換する
+		if et := c.GetEmbedTable(); et.GetName() != "" {
+			fmt.Fprintf(w, "%s%s: {\n", indent, propName)
+			for _, ec := range tableMap.findTable(et).GetColumns() {
+				from := naming.toEmbedColumnName(et, ec)
+				to := naming.toPropertyName(ec)
+				fmt.Fprintf(w, "%s  %s: raw.%s,\n", indent, to, from)
+			}
+			fmt.Fprintf(w, "%s},\n", indent)
+		} else {
+			from := c.GetName()
+			fmt.Fprintf(w, "%s%s: raw.%s,\n", indent, propName, from)
+		}
+	}
 }
 
 type Handler func(*plugin.CodeGenRequest) (*plugin.CodeGenResponse, error)
