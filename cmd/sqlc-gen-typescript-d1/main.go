@@ -262,7 +262,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
   for (let i = 1; i < len; i++) {
     params.push(last + i);
   }
-  return "(" + params.map((x: number) => "?" + x).join(", ") + ")"
+  return "(" + params.map((x: number) => "?" + x).join(", ") + ")";
 }
 `)
 		}

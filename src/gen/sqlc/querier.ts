@@ -180,5 +180,5 @@ function expandedParam(n: number, len: number, last: number): string {
   for (let i = 1; i < len; i++) {
     params.push(last + i);
   }
-  return "(" + params.map((x: number) => "?" + x).join(", ") + ")"
+  return "(" + params.map((x: number) => "?" + x).join(", ") + ")";
 }
