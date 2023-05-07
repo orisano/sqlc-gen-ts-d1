@@ -68,7 +68,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			// sqlc_embed はカラムを x.a, x.b, x.c のような形で展開する
 			// 複数の sqlc_embed が展開された結果、重複した名前のカラムの情報が得られない処理系がある
 			// そのため x.a AS x_a, x.b AS x_b, x.c AS x_c のようにクエリを書き換えることで問題を回避する
-			// カラムを一つずつ書き換えた場合に前方一致や後方一致を考慮する必要があるのでまとめて書き換えを行う
+			// カラムを一つずつ書き換えた場合は前方一致や後方一致を考慮する必要があるのでまとめて書き換えを行う
 			for _, c := range q.GetColumns() {
 				et := c.GetEmbedTable()
 				if et.GetName() == "" {
