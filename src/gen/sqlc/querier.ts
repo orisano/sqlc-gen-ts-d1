@@ -176,9 +176,9 @@ export async function getAccounts(
 }
 
 function expandedParam(n: number, len: number, last: number): string {
-    const params: number[] = [n];
-    for (let i = 1; i < len; i++) {
-        params.push(last + i);
-    }
-    return "(" + params.map((x: number) => "?" + x).join(", ") + ")"
+  const params: number[] = [n];
+  for (let i = 1; i < len; i++) {
+    params.push(last + i);
+  }
+  return "(" + params.map((x: number) => "?" + x).join(", ") + ")"
 }
