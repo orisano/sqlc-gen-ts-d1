@@ -2,7 +2,7 @@
 SELECT * FROM account WHERE id = @account_id;
 
 -- name: ListAccounts :many
-SELECT sqlc_embed(account) FROM account;
+SELECT sqlc.embed(account) FROM account;
 
 -- name: CreateAccount :exec
 INSERT INTO account (id, display_name, email)
@@ -15,4 +15,4 @@ WHERE id = @id
 RETURNING *;
 
 -- name: GetAccounts :many
-SELECT * FROM account WHERE id IN (sqlc_slice(ids));
+SELECT * FROM account WHERE id IN (sqlc.slice(ids));
