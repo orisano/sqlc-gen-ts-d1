@@ -209,7 +209,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					}
 					n := p.GetNumber()
 					propName := naming.toPropertyName(c)
-					fmt.Fprintf(querier, "  query = query.replace(\"(?%d)\", expandedParam(%d, args.%s.length, params.length));\n", n, n, propName)
+					fmt.Fprintf(querier, "  query = query.replace(\"(/*SLICE:%s*/?)\", expandedParam(%d, args.%s.length, params.length));\n", c.Name, n, propName)
 					fmt.Fprintf(querier, "  params.push(...args.%s.slice(1));\n", propName)
 				}
 				queryVar = "query"

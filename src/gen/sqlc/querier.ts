@@ -132,7 +132,7 @@ export async function updateAccountDisplayName(
 }
 
 const getAccountsQuery = `-- name: GetAccounts :many
-SELECT pk, id, display_name, email FROM account WHERE id IN (?1)`;
+SELECT pk, id, display_name, email FROM account WHERE id IN (/*SLICE:ids*/?)`;
 
 export type GetAccountsParams = {
   ids: string[];
@@ -158,7 +158,7 @@ export async function getAccounts(
 ): Promise<D1Result<GetAccountsRow>> {
   let query = getAccountsQuery;
   const params: any[] = [args.ids[0]];
-  query = query.replace("(?1)", expandedParam(1, args.ids.length, params.length));
+  query = query.replace("(/*SLICE:ids*/?)", expandedParam(1, args.ids.length, params.length));
   params.push(...args.ids.slice(1));
   return await d1
     .prepare(query)
