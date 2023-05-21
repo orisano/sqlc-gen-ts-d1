@@ -200,6 +200,17 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			var queryVar string
 			var bindArgs string
 			if hasSqlcSlice(q) {
+				// SQLite はパラメータに配列を指定できないため、sqlc.slice では実行時にクエリを書き換える必要がある
+				// sqlc はパラメータに自動採番する都合で sqlc.slice のパラメータは登場順で番号がつく
+				// しかし ? には番号がついてない文字列が出力される (kyleconroy/sqlc/pull/2274)
+				// 動的にパラメータの数が変動するが他のパラメータの番号は書き換えたくないので1個目の要素はそのまま渡して動的なパラメータは末尾に追加する
+				// 例:
+				// 	クエリ:
+				//	  SELECT * FROM foo WHERE a = @a AND id IN (sqlc.slice(ids)) AND b = @b
+				//  コンパイル済み:
+				//    SELECT id, a, b FROM foo WHERE a = ?1 AND id IN (/*SLICE:ids*/?) AND b = ?3
+				//  実行時(idsが長さ3の場合):
+				//    SELECT id, a, b FROM foo WHERE a = ?1 AND id IN (?2, ?4, ?5) AND b = ?3
 				fmt.Fprintf(querier, "  let query = %s;\n", naming.toConstQueryName(q))
 				fmt.Fprintf(querier, "  const params: any[] = [%s];\n", buildBindArgs(q))
 				for _, p := range q.GetParams() {
@@ -209,7 +220,10 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					}
 					n := p.GetNumber()
 					propName := naming.toPropertyName(c)
+					// sqlc.slice は (/*SLICE:foo*/?) という形式でクエリが書き出される (kyleconroy/sqlc/pull/2274)
+					// (?1, ?2, ?3) のような形で書き換える
 					fmt.Fprintf(querier, "  query = query.replace(\"(/*SLICE:%s*/?)\", expandedParam(%d, args.%s.length, params.length));\n", c.Name, n, propName)
+					// 1番目の要素は予め params に追加されているのでそれ以降を push する
 					fmt.Fprintf(querier, "  params.push(...args.%s.slice(1));\n", propName)
 				}
 				queryVar = "query"
@@ -257,6 +271,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		}
 
 		if requireExpandedParams {
+			// sqlc.slice は実行時にクエリ書き換えが必要でそこで使う関数
 			querier.WriteString(`function expandedParam(n: number, len: number, last: number): string {
   const params: number[] = [n];
   for (let i = 1; i < len; i++) {
