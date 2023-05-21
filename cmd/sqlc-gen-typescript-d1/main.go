@@ -271,7 +271,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		}
 
 		if requireExpandedParams {
-			// sqlc.slice は実行時にクエリ書き換えが必要でそこで使う関数
+			// sqlc.slice は実行時にクエリ書き換えが必要でその際に使う関数
 			querier.WriteString(`function expandedParam(n: number, len: number, last: number): string {
   const params: number[] = [n];
   for (let i = 1; i < len; i++) {
