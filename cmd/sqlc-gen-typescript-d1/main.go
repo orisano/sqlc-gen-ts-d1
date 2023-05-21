@@ -28,7 +28,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	tsTypeMap := buildTsTypeMap(request.GetSettings())
 	var files []*plugin.File
 	{
-		// sqlc_embed の際にスキーマの型が必要になるので models.ts として書き出す
+		// sqlc.embed の際にスキーマの型が必要になるので models.ts として書き出す
 		models := bytes.NewBuffer(nil)
 		for _, s := range request.GetCatalog().GetSchemas() {
 			for _, t := range s.GetTables() {
@@ -65,8 +65,8 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 		for _, q := range request.GetQueries() {
 			queryText := q.GetText()
-			// sqlc_embed はカラムを x.a, x.b, x.c のような形で展開する
-			// 複数の sqlc_embed が展開された結果、重複した名前のカラムの情報が得られない処理系がある
+			// sqlc.embed はカラムを x.a, x.b, x.c のような形で展開する
+			// 複数の sqlc.embed が展開された結果、重複した名前のカラムの情報が得られない処理系がある
 			// そのため x.a AS x_a, x.b AS x_b, x.c AS x_c のようにクエリを書き換えることで問題を回避する
 			// カラムを一つずつ書き換えた場合は前方一致や後方一致を考慮する必要があるのでまとめて書き換えを行う
 			for _, c := range q.GetColumns() {
@@ -96,7 +96,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					c := p.GetColumn()
 					paramName := naming.toPropertyName(c)
 					tsType := tsTypeMap.toTsType(c)
-					// パラメータは sqlc_narg を使った場合のみ nullable
+					// パラメータは sqlc.narg を使った場合のみ nullable
 					if c.GetNotNull() {
 						// パラメータに対応するカラムがわかっていて、スキーマ上で nullable であればパラメータを nullable とする
 						if tc := tableMap.findColumn(c); tc != nil && !tc.GetNotNull() {
@@ -126,7 +126,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 					tsType := ""
 
-					// sqlc_embed が使われている場合
+					// sqlc.embed が使われている場合
 					// 生成コードの内部で変換する必要があるのでクエリの内部結果型が必要になる
 					if et := c.GetEmbedTable(); et.GetName() != "" {
 						needRawType = true
@@ -147,7 +147,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			if needRawType {
 				fmt.Fprintf(querier, "type %s = {\n", naming.toRawQueryRowTypeName(q))
 				for _, c := range q.GetColumns() {
-					// sqlc_embed の場合、スキーマからカラムの情報を取得し展開する
+					// sqlc.embed の場合、スキーマからカラムの情報を取得し展開する
 					if et := c.GetEmbedTable(); et.GetName() != "" {
 						for _, ec := range tableMap.findTable(et).GetColumns() {
 							colName := naming.toEmbedColumnName(et, ec)
@@ -478,7 +478,7 @@ func buildBindArgs(q *plugin.Query) string {
 func writeFromRawMapping(w *bytes.Buffer, indent string, tableMap TableMap, q *plugin.Query) {
 	for _, c := range q.GetColumns() {
 		propName := naming.toPropertyName(c)
-		// sqlc_embed の場合はモデル型に変換する
+		// sqlc.embed の場合はモデル型に変換する
 		if et := c.GetEmbedTable(); et.GetName() != "" {
 			fmt.Fprintf(w, "%s%s: {\n", indent, propName)
 			for _, ec := range tableMap.findTable(et).GetColumns() {
