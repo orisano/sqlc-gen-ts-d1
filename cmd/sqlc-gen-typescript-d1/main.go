@@ -223,7 +223,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					// sqlc.slice は (/*SLICE:foo*/?) という形式でクエリが書き出される (kyleconroy/sqlc/pull/2274)
 					// (?1, ?2, ?3) のような形で書き換える
 					fmt.Fprintf(querier, "  query = query.replace(\"(/*SLICE:%s*/?)\", expandedParam(%d, args.%s.length, params.length));\n", c.Name, n, propName)
-					// 1番目の要素は予め params に追加されているのでそれ以降を push する
+					// 1番目の要素は宣言時に params に含まれているのでそれ以降を push する
 					fmt.Fprintf(querier, "  params.push(...args.%s.slice(1));\n", propName)
 				}
 				queryVar = "query"
