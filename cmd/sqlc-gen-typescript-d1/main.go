@@ -206,7 +206,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				// 動的にパラメータの数が変動するが既存のパラメータの番号は書き換えたくないので1個目の要素はそのまま渡して動的なパラメータは末尾に追加する
 				// 例:
 				//  クエリ:
-				//	  SELECT * FROM foo WHERE a = @a AND id IN (sqlc.slice(ids)) AND b = @b
+				//    SELECT * FROM foo WHERE a = @a AND id IN (sqlc.slice(ids)) AND b = @b
 				//  コンパイル済み:
 				//    SELECT id, a, b FROM foo WHERE a = ?1 AND id IN (/*SLICE:ids*/?) AND b = ?3
 				//  実行時(idsが長さ3の場合):
