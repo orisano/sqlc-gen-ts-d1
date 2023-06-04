@@ -22,19 +22,18 @@ type RawGetAccountRow = {
 };
 
 export async function getAccount(
-  d1: D1Database,
+  db: any,
   args: GetAccountParams
 ): Promise<GetAccountRow | null> {
-  return await d1
-    .prepare(getAccountQuery)
-    .bind(args.accountId)
-    .first<RawGetAccountRow | null>()
-    .then((raw: RawGetAccountRow | null) => raw ? {
-      pk: raw.pk,
-      id: raw.id,
-      displayName: raw.display_name,
-      email: raw.email,
-    } : null);
+  return Promise.resolve(
+    db.selectObject(getAccountQuery, [args.accountId]) || null
+  )
+  .then(raw => raw ? {
+    pk: raw.pk,
+    id: raw.id,
+    displayName: raw.display_name,
+    email: raw.email,
+  } : null) as Promise<GetAccountRow | null>;
 }
 
 const listAccountsQuery = `-- name: ListAccounts :many
@@ -52,22 +51,19 @@ type RawListAccountsRow = {
 };
 
 export async function listAccounts(
-  d1: D1Database
-): Promise<D1Result<ListAccountsRow>> {
-  return await d1
-    .prepare(listAccountsQuery)
-    .all<RawListAccountsRow>()
-    .then((r: D1Result<RawListAccountsRow>) => { return {
-      ...r,
-      results: r.results ? r.results.map((raw: RawListAccountsRow) => { return {
-        account: {
-          pk: raw.account_pk,
-          id: raw.account_id,
-          displayName: raw.account_display_name,
-          email: raw.account_email,
-        },
-      }}) : undefined,
-    }});
+  db: any
+): Promise<ListAccountsRow[]> {
+  return Promise.resolve(
+    db.selectObjects(listAccountsQuery, [])
+  )
+  .then(raws => raws.map(raw => { return {
+    account: {
+      pk: raw.account_pk,
+      id: raw.account_id,
+      displayName: raw.account_display_name,
+      email: raw.account_email,
+    },
+  }})) as Promise<ListAccountsRow[]>;
 }
 
 const createAccountQuery = `-- name: CreateAccount :exec
@@ -81,13 +77,12 @@ export type CreateAccountParams = {
 };
 
 export async function createAccount(
-  d1: D1Database,
+  db: any,
   args: CreateAccountParams
-): Promise<D1Result> {
-  return await d1
-    .prepare(createAccountQuery)
-    .bind(args.id, args.displayName, args.email)
-    .run();
+): Promise<any> {
+  return Promise.resolve(
+    db.exec(createAccountQuery, [args.id, args.displayName, args.email])
+  ) as Promise<any>;
 }
 
 const updateAccountDisplayNameQuery = `-- name: UpdateAccountDisplayName :one
@@ -116,19 +111,18 @@ type RawUpdateAccountDisplayNameRow = {
 };
 
 export async function updateAccountDisplayName(
-  d1: D1Database,
+  db: any,
   args: UpdateAccountDisplayNameParams
 ): Promise<UpdateAccountDisplayNameRow | null> {
-  return await d1
-    .prepare(updateAccountDisplayNameQuery)
-    .bind(args.displayName, args.id)
-    .first<RawUpdateAccountDisplayNameRow | null>()
-    .then((raw: RawUpdateAccountDisplayNameRow | null) => raw ? {
-      pk: raw.pk,
-      id: raw.id,
-      displayName: raw.display_name,
-      email: raw.email,
-    } : null);
+  return Promise.resolve(
+    db.selectObject(updateAccountDisplayNameQuery, [args.displayName, args.id]) || null
+  )
+  .then(raw => raw ? {
+    pk: raw.pk,
+    id: raw.id,
+    displayName: raw.display_name,
+    email: raw.email,
+  } : null) as Promise<UpdateAccountDisplayNameRow | null>;
 }
 
 const getAccountsQuery = `-- name: GetAccounts :many
@@ -153,26 +147,22 @@ type RawGetAccountsRow = {
 };
 
 export async function getAccounts(
-  d1: D1Database,
+  db: any,
   args: GetAccountsParams
-): Promise<D1Result<GetAccountsRow>> {
+): Promise<GetAccountsRow[]> {
   let query = getAccountsQuery;
   const params: any[] = [args.ids[0]];
   query = query.replace("(/*SLICE:ids*/?)", expandedParam(1, args.ids.length, params.length));
   params.push(...args.ids.slice(1));
-  return await d1
-    .prepare(query)
-    .bind(...params)
-    .all<RawGetAccountsRow>()
-    .then((r: D1Result<RawGetAccountsRow>) => { return {
-      ...r,
-      results: r.results ? r.results.map((raw: RawGetAccountsRow) => { return {
-        pk: raw.pk,
-        id: raw.id,
-        displayName: raw.display_name,
-        email: raw.email,
-      }}) : undefined,
-    }});
+  return Promise.resolve(
+    db.selectObjects(query, [args.ids[0]])
+  )
+  .then(raws => raws.map(raw => { return {
+    pk: raw.pk,
+    id: raw.id,
+    displayName: raw.display_name,
+    email: raw.email,
+  }})) as Promise<GetAccountsRow[]>;
 }
 
 function expandedParam(n: number, len: number, last: number): string {

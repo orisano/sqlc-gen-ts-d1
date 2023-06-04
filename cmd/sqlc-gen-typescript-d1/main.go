@@ -16,6 +16,10 @@ import (
 // handler は sqlc で解析したスキーマとクエリの情報を元に生成するコードの情報を返す
 func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	options := parseOption(request.GetPluginOptions())
+	target := "d1"
+	if v, ok := options["target"]; ok {
+		target = v
+	}
 	workersTypesVersion := "2022-11-30"
 	if v, ok := options["workers-types"]; ok {
 		workersTypesVersion = v
@@ -56,8 +60,12 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		}
 
 		header := bytes.NewBuffer(nil)
-		if !workersTypesV3 {
-			header.WriteString("import { D1Database, D1Result } from \"" + workersTypesPackage + "\"\n")
+		switch target {
+		case "d1":
+			if !workersTypesV3 {
+				header.WriteString("import { D1Database, D1Result } from \"" + workersTypesPackage + "\"\n")
+			}
+		case "wasm":
 		}
 
 		requireModels := map[string]bool{}
@@ -178,17 +186,32 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					resultType = naming.toRawQueryRowTypeName(q) + " | null"
 				}
 			} else if cmd == ":exec" {
-				retType = "D1Result"
+				switch target {
+				case "d1":
+					retType = "D1Result"
+				case "wasm":
+					retType = "any"
+				}
 			} else {
-				retType = "D1Result<" + rowType + ">"
-				resultType = rowType
-				if needRawType {
-					resultType = naming.toRawQueryRowTypeName(q)
+				switch target {
+				case "d1":
+					retType = "D1Result<" + rowType + ">"
+					resultType = rowType
+					if needRawType {
+						resultType = naming.toRawQueryRowTypeName(q)
+					}
+				case "wasm":
+					retType = rowType + "[]"
 				}
 			}
 
 			fmt.Fprintf(querier, "export async function %s(\n", naming.toFunctionName(q))
-			fmt.Fprintf(querier, "  d1: D1Database")
+			switch target {
+			case "d1":
+				fmt.Fprintf(querier, "  db: D1Database")
+			case "wasm":
+				fmt.Fprintf(querier, "  db: any")
+			}
 			// パラメータがないときは引数を追加しない
 			if len(q.GetParams()) > 0 {
 				querier.WriteString(",\n")
@@ -234,38 +257,69 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				bindArgs = buildBindArgs(q)
 			}
 
-			fmt.Fprintf(querier, "  return await d1\n")
-			fmt.Fprintf(querier, "    .prepare(%s)\n", queryVar)
-			if len(q.GetParams()) > 0 {
-				fmt.Fprintf(querier, "    .bind(%s)\n", bindArgs)
-			}
-			switch q.GetCmd() {
-			case ":one":
-				fmt.Fprintf(querier, "    .first<%s>()", resultType)
-			case ":many":
-				fmt.Fprintf(querier, "    .all<%s>()", resultType)
-			case ":exec":
-				fmt.Fprintf(querier, "    .run()")
-			}
-
-			// 內部結果型を使っている場合は結果型に変換する処理を生成する
-			if needRawType {
-				querier.WriteByte('\n')
-				if q.GetCmd() == ":one" {
-					fmt.Fprintf(querier, "    .then((raw: %s) => raw ? {\n", resultType)
-					writeFromRawMapping(querier, "      ", tableMap, q)
-					fmt.Fprintf(querier, "    } : null)")
-				} else {
-					fmt.Fprintf(querier, "    .then((r: D1Result<%s>) => { return {\n", resultType)
-					fmt.Fprintf(querier, "      ...r,\n")
-					fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
-					writeFromRawMapping(querier, "        ", tableMap, q)
-					fmt.Fprintf(querier, "      }}) : undefined,\n")
-					fmt.Fprintf(querier, "    }})")
+			switch target {
+			case "d1":
+				fmt.Fprintf(querier, "  return await db\n")
+				fmt.Fprintf(querier, "    .prepare(%s)\n", queryVar)
+				if len(q.GetParams()) > 0 {
+					fmt.Fprintf(querier, "    .bind(%s)\n", bindArgs)
 				}
+				switch q.GetCmd() {
+				case ":one":
+					fmt.Fprintf(querier, "    .first<%s>()", resultType)
+				case ":many":
+					fmt.Fprintf(querier, "    .all<%s>()", resultType)
+				case ":exec":
+					fmt.Fprintf(querier, "    .run()")
+				}
+
+				// 內部結果型を使っている場合は結果型に変換する処理を生成する
+				if needRawType {
+					querier.WriteByte('\n')
+					if q.GetCmd() == ":one" {
+						fmt.Fprintf(querier, "    .then((raw: %s) => raw ? {\n", resultType)
+						writeFromRawMapping(querier, "      ", tableMap, q)
+						fmt.Fprintf(querier, "    } : null)")
+					} else {
+						fmt.Fprintf(querier, "    .then((r: D1Result<%s>) => { return {\n", resultType)
+						fmt.Fprintf(querier, "      ...r,\n")
+						fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
+						writeFromRawMapping(querier, "        ", tableMap, q)
+						fmt.Fprintf(querier, "      }}) : undefined,\n")
+						fmt.Fprintf(querier, "    }})")
+					}
+				}
+				querier.WriteString(";\n")
+				querier.WriteString("}\n")
+			case "wasm":
+				fmt.Fprintf(querier, "  return Promise.resolve(\n")
+				switch q.GetCmd() {
+				case ":one":
+					fmt.Fprintf(querier, "    db.selectObject(%s, [%s]) || null\n", queryVar, buildBindArgs(q))
+				case ":many":
+					fmt.Fprintf(querier, "    db.selectObjects(%s, [%s])\n", queryVar, buildBindArgs(q))
+				case ":exec":
+					fmt.Fprintf(querier, "    db.exec(%s, [%s])\n", queryVar, buildBindArgs(q))
+				}
+				fmt.Fprintf(querier, "  )")
+
+				// 內部結果型を使っている場合は結果型に変換する処理を生成する
+				if needRawType {
+					querier.WriteByte('\n')
+					if q.GetCmd() == ":one" {
+						fmt.Fprintf(querier, "  .then(raw => raw ? {\n")
+						writeFromRawMapping(querier, "    ", tableMap, q)
+						fmt.Fprintf(querier, "  } : null)")
+					} else {
+						fmt.Fprintf(querier, "  .then(raws => raws.map(raw => { return {\n")
+						writeFromRawMapping(querier, "    ", tableMap, q)
+						fmt.Fprintf(querier, "  }}))")
+					}
+				}
+				fmt.Fprintf(querier, " as Promise<%s>", retType)
+				querier.WriteString(";\n")
+				querier.WriteString("}\n")
 			}
-			querier.WriteString(";\n")
-			querier.WriteString("}\n")
 
 			querier.WriteByte('\n')
 		}

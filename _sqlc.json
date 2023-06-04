@@ -18,7 +18,7 @@
         {
           "out": "src/gen/sqlc",
           "plugin": "typescript-d1",
-          "options": "workers-types-v3=1"
+          "options": "target=wasm"
         }
       ]
     }
