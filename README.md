@@ -6,10 +6,6 @@ https://gist.github.com/voluntas/e9516823c5223aac5b61ba51174437fd
 
 ## 使用方法
 
-https://github.com/kyleconroy/sqlc/pull/2259 がマージされるまでは
-fork https://github.com/orisano/sqlc を使う必要があります。
-sqlc\_embed をつかう場合はマージの有無に関わらず fork を使う必要があります。
-
 sqlc.json の plugins 以下に typescript-d1 を追加してください。
 
 v0.0.0-a リリースは main branch に合わせて再生成されているので sha256 を再取得しないと期待通りの動作をしないかもしれません
