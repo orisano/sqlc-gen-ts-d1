@@ -2121,7 +2121,7 @@ func file_plugin_codegen_proto_init() {
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
-			GoPackagePath: "github.com/orisano/sqlc-gen-typescript-d1/codegen/plugin",
+			GoPackagePath: "github.com/orisano/sqlc-gen-ts-d1/codegen/plugin",
 			RawDescriptor: file_plugin_codegen_proto_rawDesc,
 			NumEnums:      0,
 			NumMessages:   20,

@@ -1,4 +1,4 @@
-# sqlc-gen-typescript-d1
+# sqlc-gen-ts-d1
 
 https://gist.github.com/voluntas/e9516823c5223aac5b61ba51174437fd
 
@@ -8,16 +8,16 @@ https://gist.github.com/voluntas/e9516823c5223aac5b61ba51174437fd
 
 sqlc v1.19.0 以上で動作します。
 
-sqlc.json の plugins 以下に typescript-d1 を追加してください。
+sqlc.json の plugins 以下に ts-d1 を追加してください。
 
 v0.0.0-a リリースは main branch に合わせて再生成されているので sha256 を再取得しないと期待通りの動作をしないかもしれません
 ```bash
 cat <<EOS
 {
-    "name": "typescript-d1",
+    "name": "ts-d1",
     "wasm": {
-        "url": "https://github.com/orisano/sqlc-gen-typescript-d1/releases/download/v0.0.0-a/sqlc-gen-typescript-d1.wasm",
-        "sha256": "$(curl -sSL https://github.com/orisano/sqlc-gen-typescript-d1/releases/download/v0.0.0-a/sqlc-gen-typescript-d1.wasm.sha256)"
+        "url": "https://github.com/orisano/sqlc-gen-ts-d1/releases/download/v0.0.0-a/sqlc-gen-ts-d1.wasm",
+        "sha256": "$(curl -sSL https://github.com/orisano/sqlc-gen-ts-d1/releases/download/v0.0.0-a/sqlc-gen-ts-d1.wasm.sha256)"
     }
 }
 EOS

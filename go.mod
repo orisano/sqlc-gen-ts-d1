@@ -1,4 +1,4 @@
-module github.com/orisano/sqlc-gen-typescript-d1
+module github.com/orisano/sqlc-gen-ts-d1
 
 go 1.20
 
