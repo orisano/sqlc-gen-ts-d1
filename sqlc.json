@@ -2,10 +2,10 @@
   "version": "2",
   "plugins": [
     {
-      "name": "typescript-d1",
+      "name": "ts-d1",
       "wasm": {
-        "url": "file://bin/sqlc-gen-typescript-d1.wasm",
-        "sha256": "45099f45f7fcdb94cfb4094f983558d953057ac1f8de3a6b68cc1ac3928df197"
+        "url": "file://bin/sqlc-gen-ts-d1.wasm",
+        "sha256": "17ebd0eb5724cb96f3389cea1ca745a70a9a7dad95cca573958cfd6ca88306d6"
       }
     }
   ],
@@ -17,7 +17,7 @@
       "codegen": [
         {
           "out": "src/gen/sqlc",
-          "plugin": "typescript-d1",
+          "plugin": "ts-d1",
           "options": "workers-types-v3=1"
         }
       ]
