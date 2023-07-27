@@ -482,6 +482,7 @@ func writeFromRawMapping(w *bytes.Buffer, indent string, tableMap TableMap, q *p
 		propName := naming.toPropertyName(c)
 		// sqlc.embed の場合はモデル型に変換する
 		if et := c.GetEmbedTable(); et.GetName() != "" {
+			fmt.Fprintf(w, "%s// sqlc.embed(%s)\n", indent, propName)
 			fmt.Fprintf(w, "%s%s: {\n", indent, propName)
 			for _, ec := range tableMap.findTable(et).GetColumns() {
 				from := naming.toEmbedColumnName(et, ec)
