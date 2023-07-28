@@ -16,3 +16,6 @@ RETURNING *;
 
 -- name: GetAccounts :many
 SELECT * FROM account WHERE id IN (sqlc.slice(ids));
+
+-- name: GetConnectionId :one
+SELECT CAST(json_extract('{"connection_id":"foo"}', '$.connection_id') AS TEXT) AS connection_id;

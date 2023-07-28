@@ -379,7 +379,10 @@ type TsTypeMap struct {
 
 func (t *TsTypeMap) toTsType(col *plugin.Column) string {
 	dbType := col.GetType().GetName()
-	tsType := t.m[dbType]
+	tsType, ok := t.m[strings.ToUpper(dbType)]
+	if !ok {
+		tsType = "number | string"
+	}
 	if col.GetIsSqlcSlice() {
 		tsType += "[]"
 	}
@@ -397,7 +400,7 @@ func buildTsTypeMap(settings *plugin.Settings) *TsTypeMap {
 		"JSON":     "string",
 	}
 	for _, o := range settings.GetOverrides() {
-		m[o.GetDbType()] = o.GetCodeType()
+		m[strings.ToUpper(o.GetDbType())] = o.GetCodeType()
 	}
 	return &TsTypeMap{m: m}
 }

@@ -182,6 +182,28 @@ export async function getAccounts(
     }});
 }
 
+const getConnectionIdQuery = `-- name: GetConnectionId :one
+SELECT CAST(json_extract('{"connection_id":"foo"}', '$.connection_id') AS TEXT) AS connection_id`;
+
+export type GetConnectionIdRow = {
+  connectionId: string;
+};
+
+type RawGetConnectionIdRow = {
+  connection_id: string;
+};
+
+export async function getConnectionId(
+  d1: D1Database
+): Promise<GetConnectionIdRow | null> {
+  return await d1
+    .prepare(getConnectionIdQuery)
+    .first<RawGetConnectionIdRow | null>()
+    .then((raw: RawGetConnectionIdRow | null) => raw ? {
+      connectionId: raw.connection_id,
+    } : null);
+}
+
 function expandedParam(n: number, len: number, last: number): string {
   const params: number[] = [n];
   for (let i = 1; i < len; i++) {
