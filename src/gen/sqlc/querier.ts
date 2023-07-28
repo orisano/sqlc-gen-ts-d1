@@ -3,7 +3,7 @@
 //   sqlc v1.19.1
 //   sqlc-gen-ts-d1 v0.0.0-a@HEAD
 
-import { D1Database, D1Result } from "@cloudflare/workers-types/2022-11-30"
+import { D1Database, D1Result } from "@cloudflare/workers-types/experimental"
 import { Account } from "./models"
 
 const getAccountQuery = `-- name: GetAccount :one
@@ -65,7 +65,7 @@ export async function listAccounts(
     .all<RawListAccountsRow>()
     .then((r: D1Result<RawListAccountsRow>) => { return {
       ...r,
-      results: r.results ? r.results.map((raw: RawListAccountsRow) => { return {
+      results: r.results.map((raw: RawListAccountsRow) => { return {
         // sqlc.embed(account)
         account: {
           pk: raw.account_pk,
@@ -73,7 +73,7 @@ export async function listAccounts(
           displayName: raw.account_display_name,
           email: raw.account_email,
         },
-      }}) : undefined,
+      }}),
     }});
 }
 
@@ -173,12 +173,12 @@ export async function getAccounts(
     .all<RawGetAccountsRow>()
     .then((r: D1Result<RawGetAccountsRow>) => { return {
       ...r,
-      results: r.results ? r.results.map((raw: RawGetAccountsRow) => { return {
+      results: r.results.map((raw: RawGetAccountsRow) => { return {
         pk: raw.pk,
         id: raw.id,
         displayName: raw.display_name,
         email: raw.email,
-      }}) : undefined,
+      }}),
     }});
 }
 

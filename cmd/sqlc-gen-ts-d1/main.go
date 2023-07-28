@@ -260,9 +260,15 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				} else {
 					fmt.Fprintf(querier, "    .then((r: D1Result<%s>) => { return {\n", resultType)
 					fmt.Fprintf(querier, "      ...r,\n")
-					fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
-					writeFromRawMapping(querier, "        ", tableMap, q)
-					fmt.Fprintf(querier, "      }}) : undefined,\n")
+					if workersTypesV3 {
+						fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
+						writeFromRawMapping(querier, "        ", tableMap, q)
+						fmt.Fprintf(querier, "      }}) : undefined,\n")
+					} else {
+						fmt.Fprintf(querier, "      results: r.results.map((raw: %s) => { return {\n", resultType)
+						writeFromRawMapping(querier, "        ", tableMap, q)
+						fmt.Fprintf(querier, "      }}),\n")
+					}
 					fmt.Fprintf(querier, "    }})")
 				}
 			}
