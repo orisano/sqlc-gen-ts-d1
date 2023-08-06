@@ -204,7 +204,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			if hasSqlcSlice(q) {
 				// SQLite はパラメータに配列を指定できないため、sqlc.slice では実行時にクエリを書き換える必要がある
 				// sqlc はパラメータに自動採番する都合で sqlc.slice のパラメータは登場順で番号がつく
-				// しかし ? には番号がついてない文字列が出力される (kyleconroy/sqlc/pull/2274)
+				// しかし ? には番号がついてない文字列が出力される (sqlc-dev/sqlc/pull/2274)
 				// 動的にパラメータの数が変動するが既存のパラメータの番号は書き換えたくないので1個目の要素はそのまま渡して動的なパラメータは末尾に追加する
 				// 例:
 				//  クエリ:
@@ -222,7 +222,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					}
 					n := p.GetNumber()
 					propName := naming.toPropertyName(c)
-					// sqlc.slice は (/*SLICE:foo*/?) という形式でクエリが書き出される (kyleconroy/sqlc/pull/2274)
+					// sqlc.slice は (/*SLICE:foo*/?) という形式でクエリが書き出される (sqlc-dev/sqlc/pull/2274)
 					// (?1, ?2, ?3) のような形で書き換える
 					fmt.Fprintf(querier, "  query = query.replace(\"(/*SLICE:%s*/?)\", expandedParam(%d, args.%s.length, params.length));\n", c.Name, n, propName)
 					// 1番目の要素は宣言時に params に含まれているのでそれ以降を push する
