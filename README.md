@@ -1,6 +1,6 @@
 # sqlc-gen-ts-d1
 
-https://gist.github.com/voluntas/e9516823c5223aac5b61ba51174437fd
+https://github.com/voluntas/sqlc-gen-ts-d1-spec
 
 を元に作られたプロトタイプです。
 
