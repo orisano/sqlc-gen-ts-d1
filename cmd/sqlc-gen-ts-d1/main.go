@@ -59,7 +59,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
 		if !workersTypesV3 {
-			header.WriteString("import { D1Database, D1Result } from \"" + workersTypesPackage + "\"\n")
+			header.WriteString("import { D1Database, D1Result, D1PreparedStatement } from \"" + workersTypesPackage + "\"\n")
 		}
 
 		requireModels := map[string]bool{}
@@ -114,7 +114,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 			needRawType := false
 			// :exec はレスポンスが返ってこないので型を生成しない
-			if q.GetCmd() != ":exec" {
+			if cmd := q.GetCmd(); cmd != ":exec" && cmd != ":batchexec" {
 				fmt.Fprintf(querier, "export type %s = {\n", naming.toQueryRowTypeName(q))
 				for _, c := range q.GetColumns() {
 					colName := c.GetName()
@@ -181,6 +181,8 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				}
 			} else if cmd == ":exec" {
 				retType = "D1Result"
+			} else if cmd == ":batchexec" {
+				retType = "D1PreparedStatement"
 			} else {
 				retType = "D1Result<" + rowType + ">"
 				resultType = rowType
@@ -189,7 +191,11 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				}
 			}
 
-			fmt.Fprintf(querier, "export async function %s(\n", naming.toFunctionName(q))
+			if q.GetCmd() == ":batchexec" {
+				fmt.Fprintf(querier, "export function %s(\n", naming.toFunctionName(q))
+			} else {
+				fmt.Fprintf(querier, "export async function %s(\n", naming.toFunctionName(q))
+			}
 			fmt.Fprintf(querier, "  d1: D1Database")
 			// パラメータがないときは引数を追加しない
 			if len(q.GetParams()) > 0 {
@@ -197,7 +203,11 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				fmt.Fprintf(querier, "  args: %s", naming.toParamsTypeName(q))
 			}
 			querier.WriteString("\n")
-			fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
+			if q.GetCmd() == ":batchexec" {
+				fmt.Fprintf(querier, "): %s {\n", retType)
+			} else {
+				fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
+			}
 
 			var queryVar string
 			var bindArgs string
@@ -236,7 +246,11 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				bindArgs = buildBindArgs(q)
 			}
 
-			fmt.Fprintf(querier, "  return await d1\n")
+			if q.GetCmd() == ":batchexec" {
+				fmt.Fprintf(querier, "  return d1\n")
+			} else {
+				fmt.Fprintf(querier, "  return await d1\n")
+			}
 			fmt.Fprintf(querier, "    .prepare(%s)\n", queryVar)
 			if len(q.GetParams()) > 0 {
 				fmt.Fprintf(querier, "    .bind(%s)\n", bindArgs)
