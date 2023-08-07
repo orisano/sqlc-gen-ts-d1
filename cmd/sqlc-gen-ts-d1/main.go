@@ -393,11 +393,15 @@ func (t *TsTypeMap) toTsType(col *plugin.Column) string {
 }
 
 func buildTsTypeMap(settings *plugin.Settings) *TsTypeMap {
+	// https://developers.cloudflare.com/d1/platform/client-api/#type-conversion
 	m := map[string]string{
+		"NULL":     "null",
+		"REAL":     "number",
 		"INTEGER":  "number",
 		"TEXT":     "string",
 		"DATETIME": "string",
 		"JSON":     "string",
+		"BLOB":     "ArrayBuffer",
 	}
 	for _, o := range settings.GetOverrides() {
 		m[strings.ToUpper(o.GetDbType())] = o.GetCodeType()
