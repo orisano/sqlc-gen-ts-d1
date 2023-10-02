@@ -59,8 +59,13 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
 		if !workersTypesV3 {
-			header.WriteString("import { D1Database, D1Result } from \"" + workersTypesPackage + "\"\n")
+			header.WriteString("import { D1Database, D1PreparedStatement, D1Result } from \"" + workersTypesPackage + "\"\n")
 		}
+
+		querier.WriteString("type Query<T> = {\n")
+		querier.WriteString("  then(onFulfilled?: (value: T) => void, onRejected?: (reason?: any) => void): void;\n")
+		querier.WriteString("  batch(): D1PreparedStatement;\n")
+		querier.WriteString("}\n")
 
 		requireModels := map[string]bool{}
 		requireExpandedParams := false
@@ -189,7 +194,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				}
 			}
 
-			fmt.Fprintf(querier, "export async function %s(\n", naming.toFunctionName(q))
+			fmt.Fprintf(querier, "export function %s(\n", naming.toFunctionName(q))
 			fmt.Fprintf(querier, "  d1: D1Database")
 			// パラメータがないときは引数を追加しない
 			if len(q.GetParams()) > 0 {
@@ -197,7 +202,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				fmt.Fprintf(querier, "  args: %s", naming.toParamsTypeName(q))
 			}
 			querier.WriteString("\n")
-			fmt.Fprintf(querier, "): Promise<%s> {\n", retType)
+			fmt.Fprintf(querier, "): Query<%s> {\n", retType)
 
 			var queryVar string
 			var bindArgs string
@@ -236,43 +241,51 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				bindArgs = buildBindArgs(q)
 			}
 
-			fmt.Fprintf(querier, "  return await d1\n")
-			fmt.Fprintf(querier, "    .prepare(%s)\n", queryVar)
+			fmt.Fprintf(querier, "  const ps = d1\n")
+			fmt.Fprintf(querier, "    .prepare(%s)", queryVar)
 			if len(q.GetParams()) > 0 {
-				fmt.Fprintf(querier, "    .bind(%s)\n", bindArgs)
+				querier.WriteString("\n")
+				fmt.Fprintf(querier, "    .bind(%s)", bindArgs)
 			}
+			querier.WriteString(";\n")
+
+			fmt.Fprintf(querier, "  return {\n")
+			fmt.Fprintf(querier, "    then(onFulfilled?: (value: %s) => void, onRejected?: (reason?: any) => void) {\n", retType)
+
 			switch q.GetCmd() {
 			case ":one":
-				fmt.Fprintf(querier, "    .first<%s>()", resultType)
+				fmt.Fprintf(querier, "      ps.first<%s>()\n", resultType)
 			case ":many":
-				fmt.Fprintf(querier, "    .all<%s>()", resultType)
+				fmt.Fprintf(querier, "      ps.all<%s>()\n", resultType)
 			case ":exec":
-				fmt.Fprintf(querier, "    .run()")
+				fmt.Fprintf(querier, "      ps.run()\n")
 			}
 
 			// 內部結果型を使っている場合は結果型に変換する処理を生成する
 			if needRawType {
-				querier.WriteByte('\n')
 				if q.GetCmd() == ":one" {
-					fmt.Fprintf(querier, "    .then((raw: %s) => raw ? {\n", resultType)
-					writeFromRawMapping(querier, "      ", tableMap, q)
-					fmt.Fprintf(querier, "    } : null)")
+					fmt.Fprintf(querier, "      .then((raw: %s) => raw ? {\n", resultType)
+					writeFromRawMapping(querier, "        ", tableMap, q)
+					fmt.Fprintf(querier, "      } : null)\n")
 				} else {
-					fmt.Fprintf(querier, "    .then((r: D1Result<%s>) => { return {\n", resultType)
-					fmt.Fprintf(querier, "      ...r,\n")
+					fmt.Fprintf(querier, "       .then((r: D1Result<%s>) => { return {\n", resultType)
+					fmt.Fprintf(querier, "          ...r,\n")
 					if workersTypesV3 {
-						fmt.Fprintf(querier, "      results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
-						writeFromRawMapping(querier, "        ", tableMap, q)
-						fmt.Fprintf(querier, "      }}) : undefined,\n")
+						fmt.Fprintf(querier, "          results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
+						writeFromRawMapping(querier, "            ", tableMap, q)
+						fmt.Fprintf(querier, "          }}) : undefined,\n")
 					} else {
-						fmt.Fprintf(querier, "      results: r.results.map((raw: %s) => { return {\n", resultType)
-						writeFromRawMapping(querier, "        ", tableMap, q)
-						fmt.Fprintf(querier, "      }}),\n")
+						fmt.Fprintf(querier, "          results: r.results.map((raw: %s) => { return {\n", resultType)
+						writeFromRawMapping(querier, "            ", tableMap, q)
+						fmt.Fprintf(querier, "          }}),\n")
 					}
-					fmt.Fprintf(querier, "    }})")
+					fmt.Fprintf(querier, "      }})\n")
 				}
 			}
-			querier.WriteString(";\n")
+			fmt.Fprintf(querier, "      .then(onFulfilled).catch(onRejected);\n")
+			fmt.Fprintf(querier, "    },\n")
+			fmt.Fprintf(querier, "    batch() { return ps; },\n")
+			fmt.Fprintf(querier, "  }\n")
 			querier.WriteString("}\n")
 
 			querier.WriteByte('\n')
