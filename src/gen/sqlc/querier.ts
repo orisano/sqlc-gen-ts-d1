@@ -41,13 +41,13 @@ export function getAccount(
   return {
     then(onFulfilled?: (value: GetAccountRow | null) => void, onRejected?: (reason?: any) => void) {
       ps.first<RawGetAccountRow | null>()
-      .then((raw: RawGetAccountRow | null) => raw ? {
-        pk: raw.pk,
-        id: raw.id,
-        displayName: raw.display_name,
-        email: raw.email,
-      } : null)
-      .then(onFulfilled).catch(onRejected);
+        .then((raw: RawGetAccountRow | null) => raw ? {
+          pk: raw.pk,
+          id: raw.id,
+          displayName: raw.display_name,
+          email: raw.email,
+        } : null)
+        .then(onFulfilled).catch(onRejected);
     },
     batch() { return ps; },
   }
@@ -75,7 +75,7 @@ export function listAccounts(
   return {
     then(onFulfilled?: (value: D1Result<ListAccountsRow>) => void, onRejected?: (reason?: any) => void) {
       ps.all<RawListAccountsRow>()
-       .then((r: D1Result<RawListAccountsRow>) => { return {
+        .then((r: D1Result<RawListAccountsRow>) => { return {
           ...r,
           results: r.results.map((raw: RawListAccountsRow) => { return {
             // sqlc.embed(account)
@@ -86,8 +86,8 @@ export function listAccounts(
               email: raw.account_email,
             },
           }}),
-      }})
-      .then(onFulfilled).catch(onRejected);
+        }})
+        .then(onFulfilled).catch(onRejected);
     },
     batch() { return ps; },
   }
@@ -113,7 +113,7 @@ export function createAccount(
   return {
     then(onFulfilled?: (value: D1Result) => void, onRejected?: (reason?: any) => void) {
       ps.run()
-      .then(onFulfilled).catch(onRejected);
+        .then(onFulfilled).catch(onRejected);
     },
     batch() { return ps; },
   }
@@ -154,13 +154,13 @@ export function updateAccountDisplayName(
   return {
     then(onFulfilled?: (value: UpdateAccountDisplayNameRow | null) => void, onRejected?: (reason?: any) => void) {
       ps.first<RawUpdateAccountDisplayNameRow | null>()
-      .then((raw: RawUpdateAccountDisplayNameRow | null) => raw ? {
-        pk: raw.pk,
-        id: raw.id,
-        displayName: raw.display_name,
-        email: raw.email,
-      } : null)
-      .then(onFulfilled).catch(onRejected);
+        .then((raw: RawUpdateAccountDisplayNameRow | null) => raw ? {
+          pk: raw.pk,
+          id: raw.id,
+          displayName: raw.display_name,
+          email: raw.email,
+        } : null)
+        .then(onFulfilled).catch(onRejected);
     },
     batch() { return ps; },
   }
@@ -201,7 +201,7 @@ export function getAccounts(
   return {
     then(onFulfilled?: (value: D1Result<GetAccountsRow>) => void, onRejected?: (reason?: any) => void) {
       ps.all<RawGetAccountsRow>()
-       .then((r: D1Result<RawGetAccountsRow>) => { return {
+        .then((r: D1Result<RawGetAccountsRow>) => { return {
           ...r,
           results: r.results.map((raw: RawGetAccountsRow) => { return {
             pk: raw.pk,
@@ -209,8 +209,8 @@ export function getAccounts(
             displayName: raw.display_name,
             email: raw.email,
           }}),
-      }})
-      .then(onFulfilled).catch(onRejected);
+        }})
+        .then(onFulfilled).catch(onRejected);
     },
     batch() { return ps; },
   }
@@ -235,10 +235,10 @@ export function getConnectionId(
   return {
     then(onFulfilled?: (value: GetConnectionIdRow | null) => void, onRejected?: (reason?: any) => void) {
       ps.first<RawGetConnectionIdRow | null>()
-      .then((raw: RawGetConnectionIdRow | null) => raw ? {
-        connectionId: raw.connection_id,
-      } : null)
-      .then(onFulfilled).catch(onRejected);
+        .then((raw: RawGetConnectionIdRow | null) => raw ? {
+          connectionId: raw.connection_id,
+        } : null)
+        .then(onFulfilled).catch(onRejected);
     },
     batch() { return ps; },
   }

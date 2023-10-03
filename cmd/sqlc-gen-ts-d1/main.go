@@ -264,25 +264,25 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			// 內部結果型を使っている場合は結果型に変換する処理を生成する
 			if needRawType {
 				if q.GetCmd() == ":one" {
-					fmt.Fprintf(querier, "      .then((raw: %s) => raw ? {\n", resultType)
-					writeFromRawMapping(querier, "        ", tableMap, q)
-					fmt.Fprintf(querier, "      } : null)\n")
+					fmt.Fprintf(querier, "        .then((raw: %s) => raw ? {\n", resultType)
+					writeFromRawMapping(querier, "          ", tableMap, q)
+					fmt.Fprintf(querier, "        } : null)\n")
 				} else {
-					fmt.Fprintf(querier, "       .then((r: D1Result<%s>) => { return {\n", resultType)
+					fmt.Fprintf(querier, "        .then((r: D1Result<%s>) => { return {\n", resultType)
 					fmt.Fprintf(querier, "          ...r,\n")
 					if workersTypesV3 {
 						fmt.Fprintf(querier, "          results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
-						writeFromRawMapping(querier, "            ", tableMap, q)
+						writeFromRawMapping(querier, "             ", tableMap, q)
 						fmt.Fprintf(querier, "          }}) : undefined,\n")
 					} else {
 						fmt.Fprintf(querier, "          results: r.results.map((raw: %s) => { return {\n", resultType)
 						writeFromRawMapping(querier, "            ", tableMap, q)
 						fmt.Fprintf(querier, "          }}),\n")
 					}
-					fmt.Fprintf(querier, "      }})\n")
+					fmt.Fprintf(querier, "        }})\n")
 				}
 			}
-			fmt.Fprintf(querier, "      .then(onFulfilled).catch(onRejected);\n")
+			fmt.Fprintf(querier, "        .then(onFulfilled).catch(onRejected);\n")
 			fmt.Fprintf(querier, "    },\n")
 			fmt.Fprintf(querier, "    batch() { return ps; },\n")
 			fmt.Fprintf(querier, "  }\n")
