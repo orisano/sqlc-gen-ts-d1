@@ -5,7 +5,7 @@
       "name": "ts-d1",
       "wasm": {
         "url": "file://bin/sqlc-gen-ts-d1.wasm",
-        "sha256": "191a34fb9fba4fe5eb2dc1fde34b5829b79d153b7545b0b6381f68ebf40d5b5d"
+        "sha256": "d3ec5b3398bdae9932046db311456091c5f12dba247262b30713e98fe9937057"
       }
     }
   ],
