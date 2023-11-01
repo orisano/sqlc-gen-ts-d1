@@ -467,7 +467,7 @@ func (Naming) toRawQueryRowTypeName(q *plugin.Query) string {
 	return "Raw" + q.GetName() + "Row"
 }
 
-// toEmbedColumnName は sqlc_embed が使われたときのカラム名を返す
+// toEmbedColumnName は sqlc.embed が使われたときのカラム名を返す
 func (Naming) toEmbedColumnName(e *plugin.Identifier, c *plugin.Column) string {
 	// MEMO: "_" 1つだと最悪他のカラム名と衝突してしまいそう
 	return e.GetName() + "_" + c.GetName()
