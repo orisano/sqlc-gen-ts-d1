@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +16,10 @@ import (
 
 // handler は sqlc で解析したスキーマとクエリの情報を元に生成するコードの情報を返す
 func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
-	options := parseOption(request.GetPluginOptions())
+	options, err := parseOption(request.GetPluginOptions())
+	if err != nil {
+		return nil, fmt.Errorf("parse option: %w", err)
+	}
 	workersTypesVersion := "2022-11-30"
 	if v, ok := options["workers-types"]; ok {
 		workersTypesVersion = v
@@ -371,19 +375,28 @@ func buildTableMap(catalog *plugin.Catalog) TableMap {
 	return tm
 }
 
-// parseOption はクオートされたカンマ区切りの`key=value`形式の入力を受け取りマップとして返す
+// parseOption はクオートされたカンマ区切りの`key=value`形式かjsonのオブジェクト形式の入力を受け取りマップとして返す
 // 例: `"foo1=bar,foo2=buz"` => map[string]string{"foo1": "bar", "foo2": "buz"}
-func parseOption(opt []byte) map[string]string {
+// 例: `{"foo1":"bar","foo2":"buz"}` => map[string]string{"foo1": "bar", "foo2": "buz"}
+func parseOption(opt []byte) (map[string]string, error) {
 	m := map[string]string{}
 	if len(opt) == 0 {
-		return m
+		return m, nil
 	}
+
+	if bytes.HasPrefix(opt, []byte("{")) {
+		if err := json.Unmarshal(opt, &m); err != nil {
+			return nil, fmt.Errorf("unmarshal: %w", err)
+		}
+		return m, nil
+	}
+
 	s, _ := strconv.Unquote(string(opt))
 	for _, kv := range strings.Split(s, ",") {
 		k, v, _ := strings.Cut(kv, "=")
 		m[k] = v
 	}
-	return m
+	return m, nil
 }
 
 type TsTypeMap struct {

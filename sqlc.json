@@ -5,7 +5,7 @@
       "name": "ts-d1",
       "wasm": {
         "url": "file://bin/sqlc-gen-ts-d1.wasm",
-        "sha256": "d3ec5b3398bdae9932046db311456091c5f12dba247262b30713e98fe9937057"
+        "sha256": "2461282b8265f470ffe4b59c7b880f345accbac42f870595c6ac9f980dbaa9a4"
       }
     }
   ],
@@ -18,7 +18,9 @@
         {
           "out": "src/gen/sqlc",
           "plugin": "ts-d1",
-          "options": "workers-types=experimental"
+          "options": {
+            "workers-types": "experimental"
+          }
         }
       ]
     }
