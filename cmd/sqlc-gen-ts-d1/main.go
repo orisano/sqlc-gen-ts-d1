@@ -438,7 +438,9 @@ func buildTsTypeMap(settings *plugin.Settings) *TsTypeMap {
 func toUpperCamel(snake string) string {
 	var b strings.Builder
 	for _, t := range strings.Split(snake, "_") {
-		b.WriteString(strings.ToUpper(t[:1]) + t[1:])
+		if t != "" {
+			b.WriteString(strings.ToUpper(t[:1]) + t[1:])
+		}
 	}
 	return b.String()
 }
